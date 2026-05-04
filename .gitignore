@@ -1,7 +1,7 @@
 # colcon build artifacts — never commit these
-build/
-install/
-log/
+..build/
+..install/
+..log/
 __pycache__/
 *.pyc
 *.pyo
