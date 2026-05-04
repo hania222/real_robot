@@ -1,0 +1,9 @@
+source;share/real_controllers/hook/pythonpath.ps1
+source;share/real_controllers/hook/pythonpath.dsv
+source;share/real_controllers/hook/pythonpath.sh
+source;share/real_controllers/hook/ament_prefix_path.ps1
+source;share/real_controllers/hook/ament_prefix_path.dsv
+source;share/real_controllers/hook/ament_prefix_path.sh
+source;../../build/real_controllers/share/real_controllers/hook/pythonpath_develop.ps1
+source;../../build/real_controllers/share/real_controllers/hook/pythonpath_develop.dsv
+source;../../build/real_controllers/share/real_controllers/hook/pythonpath_develop.sh

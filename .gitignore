@@ -1,0 +1,14 @@
+# colcon build artifacts — never commit these
+__pycache__/
+*.pyc
+*.pyo
+.eggs/
+*.egg-info/
+
+# Arduino build cache
+real_firmware/main/build/
+real_firmware/main/.pio/
+
+# ROS logs
+.ros/
+log/

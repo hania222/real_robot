@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot name="Wheeled_Base">
+
+  <!-- ═══════════════════════════════════════════════════
+       CHASSIS
+  ═══════════════════════════════════════════════════ -->
+  <link name="CHASSIS">
+    <inertial>
+      <origin xyz="0.141596575317463 3.06351797598192E-05 0.0368731174163016" rpy="0 0 0"/>
+      <mass value="3.85214064507162"/>
+      <inertia ixx="0.0280367432114013" ixy="-1.94418799965282E-08" ixz="3.68581491991962E-10"
+               iyy="0.0741766477398675" iyz="-7.93960411555404E-10" izz="0.099710005471166"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://real_description/meshes/CHASSIS.STL"/></geometry>
+      <material name=""><color rgba="0.867 0.910 1 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://real_description/meshes/CHASSIS.STL"/></geometry>
+    </collision>
+  </link>
+
+  <!-- ═══════════════════════════════════════════════════
+       LEFT WHEEL
+  ═══════════════════════════════════════════════════ -->
+  <link name="LEFT_WHEEL">
+    <inertial>
+      <origin xyz="7.15469609002817E-07 -0.000435316178176055 1.43219237691561E-07" rpy="0 0 0"/>
+      <mass value="0.172871365054941"/>
+      <inertia ixx="0.00026415067034445" ixy="-6.94216331513327E-10" ixz="9.47688308979346E-10"
+               iyy="0.00041295850631102" iyz="-1.39676863618059E-10" izz="0.000264146108822354"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://real_description/meshes/LEFT_WHEEL.STL"/></geometry>
+      <material name=""><color rgba="0.753 0.753 0.753 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://real_description/meshes/LEFT_WHEEL.STL"/></geometry>
+    </collision>
+  </link>
+
+  <joint name="left_wheel" type="continuous">
+    <origin xyz="0 0.320999820000179 -0.0509998800001172" rpy="0 0 0"/>
+    <parent link="CHASSIS"/>
+    <child  link="LEFT_WHEEL"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0.05" friction="0.2"/>
+  </joint>
+
+  <!-- ═══════════════════════════════════════════════════
+       RIGHT WHEEL
+  ═══════════════════════════════════════════════════ -->
+  <link name="RIGHT_WHEEL">
+    <inertial>
+      <origin xyz="-6.4057294135722E-07 -0.000435317987241501 -3.49392368793888E-07" rpy="0 0 0"/>
+      <mass value="0.172871331048852"/>
+      <inertia ixx="0.000264149727072614" ixy="6.21333479649486E-10" ixz="2.07473043228133E-09"
+               iyy="0.000412958504217706" iyz="3.39693702665804E-10" izz="0.000264147047163848"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://real_description/meshes/RIGHT_WHEEL.STL"/></geometry>
+      <material name=""><color rgba="0.753 0.753 0.753 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://real_description/meshes/RIGHT_WHEEL.STL"/></geometry>
+    </collision>
+  </link>
+
+  <joint name="right_wheel" type="continuous">
+    <origin xyz="0 -0.32100005999994 -0.0509998800001111" rpy="3.14159265358979 0 0"/>
+    <parent link="CHASSIS"/>
+    <child  link="RIGHT_WHEEL"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0.05" friction="0.2"/>
+  </joint>
+
+  <!-- ═══════════════════════════════════════════════════
+       FRONT SWIVEL + ROLLING
+  ═══════════════════════════════════════════════════ -->
+  <link name="FRONT_SWIVEL">
+    <inertial>
+      <origin xyz="-0.0013624425329018 -0.00374273524947871 -0.00167971374459603" rpy="0 0 0"/>
+      <mass value="0.0328328826420678"/>
+      <inertia ixx="8.17465482226448E-06" ixy="9.65823853357969E-09" ixz="1.0262490366987E-07"
+               iyy="7.44752607271619E-06" iyz="-1.06256948830954E-06" izz="1.09255320334295E-05"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://real_description/meshes/FRONT_SWIVEL.STL"/></geometry>
+      <material name=""><color rgba="0.294 0.294 0.294 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://real_description/meshes/FRONT_SWIVEL.STL"/></geometry>
+    </collision>
+  </link>
+
+  <joint name="front_swivel" type="continuous">
+    <origin xyz="0.399999940000059 0 -0.0540828883294461" rpy="0 0 0"/>
+    <parent link="CHASSIS"/>
+    <child  link="FRONT_SWIVEL"/>
+    <axis xyz="0 0 1"/>
+    <dynamics damping="0.005" friction="0.02"/>
+  </joint>
+
+  <link name="FRONT_ROLLING">
+    <inertial>
+      <origin xyz="0 0 -1.73472347597681E-17" rpy="0 0 0"/>
+      <mass value="0.0472944068607781"/>
+      <inertia ixx="9.50735464480307E-06" ixy="2.2264335997598E-21" ixz="-7.6762360844921E-22"
+               iyy="9.50735464480307E-06" iyz="5.28823003569254E-22" izz="1.4188378350207E-05"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://real_description/meshes/FRONT_ROLLING.STL"/></geometry>
+      <material name=""><color rgba="0.294 0.294 0.294 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://real_description/meshes/FRONT_ROLLING.STL"/></geometry>
+    </collision>
+  </link>
+
+  <joint name="front_rolling" type="continuous">
+    <origin xyz="0.000959824507811111 -0.0229799638144669 -0.037" rpy="-1.5707963267949 0 -1.5290527042589"/>
+    <parent link="FRONT_SWIVEL"/>
+    <child  link="FRONT_ROLLING"/>
+    <axis xyz="0 0 1"/>
+    <dynamics damping="0.01" friction="0.05"/>
+  </joint>
+
+  <!-- ═══════════════════════════════════════════════════
+       REAR SWIVEL + ROLLING
+  ═══════════════════════════════════════════════════ -->
+  <link name="REAR_SWIVELING">
+    <inertial>
+      <origin xyz="-0.00136244253290196 -0.00374273524947866 -0.00167971374459558" rpy="0 0 0"/>
+      <mass value="0.0328328826420671"/>
+      <inertia ixx="8.17465482226413E-06" ixy="9.65823853354646E-09" ixz="1.02624903669841E-07"
+               iyy="7.44752607271595E-06" iyz="-1.06256948830951E-06" izz="1.09255320334292E-05"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://real_description/meshes/REAR_SWIVELING.STL"/></geometry>
+      <material name=""><color rgba="0.388 0.420 0.388 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://real_description/meshes/REAR_SWIVELING.STL"/></geometry>
+    </collision>
+  </link>
+
+  <joint name="rear_swiveling" type="continuous">
+    <origin xyz="-0.400000059999942 0 -0.0540828883294474" rpy="0 0 0"/>
+    <parent link="CHASSIS"/>
+    <child  link="REAR_SWIVELING"/>
+    <axis xyz="0 0 1"/>
+    <dynamics damping="0.005" friction="0.02"/>
+  </joint>
+
+  <link name="REAR_ROLLING">
+    <inertial>
+      <origin xyz="1.11022302462516E-16 -1.38777878078145E-17 0" rpy="0 0 0"/>
+      <mass value="0.047294406860778"/>
+      <inertia ixx="1.4180226262601E-05" ixy="1.17799425151627E-20" ixz="-1.95175968806119E-07"
+               iyy="9.50735464480305E-06" iyz="-2.37038944284727E-21" izz="9.51550673240895E-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://real_description/meshes/REAR_ROLLING.STL"/></geometry>
+      <material name=""><color rgba="0.294 0.294 0.294 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://real_description/meshes/REAR_ROLLING.STL"/></geometry>
+    </collision>
+  </link>
+
+  <joint name="rear_rolling" type="continuous">
+    <origin xyz="0.000959824507811069 -0.0229799638144668 -0.037" rpy="1.5707963267949 0 3.14159265358979"/>
+    <parent link="REAR_SWIVELING"/>
+    <child  link="REAR_ROLLING"/>
+    <axis xyz="0.999128861498558 0 -0.041731500339619"/>
+    <dynamics damping="0.01" friction="0.05"/>
+  </joint>
+
+
+
+
+  <!-- ═══════════════════════════════════════════════════
+       LIDAR
+  ═══════════════════════════════════════════════════ -->
+  <link name="lidar_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><cylinder radius="0.05" length="0.04"/></geometry>
+      <material name="lidar_black"><color rgba="0.1 0.1 0.1 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><cylinder radius="0.05" length="0.04"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.170"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0"
+               iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+  </link>
+
+  <joint name="lidar_joint" type="fixed">
+    <parent link="CHASSIS"/>
+    <child  link="lidar_link"/>
+    <origin xyz="-0.32 0.0 0.055" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ═══════════════════════════════════════════════════
+       IMU — MPU-6050 (mounted on ESP32, on the chassis)
+       djust xyz to match actual physical position
+  ═════════════════════════════════════════ -->
+  <link name="imu_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><box size="0.03 0.03 0.01"/></geometry>
+      <material name="imu_blue"><color rgba="0.0 0.0 1.0 1"/></material>
+    </visual>
+    <inertial>
+      <mass value="0.01"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0"
+               iyy="0.000001" iyz="0" izz="0.000001"/>
+    </inertial>
+  </link>
+
+  <joint name="imu_joint" type="fixed">
+    <parent link="CHASSIS"/>
+    <child  link="imu_link"/>
+    <origin xyz="0.0 0.0 0.05" rpy="0 0 0"/>
+  </joint>
+</robot>
+  
