@@ -5,10 +5,13 @@
 // ═══════════════════════════════════════════════════════
 #define WHEEL_RADIUS      0.08f  // 160mm diameter → 80mm radius
 #define WHEEL_BASE        0.642f   // metres — from URDF joints
-#define GEAR_RATIO        100.0f    // JGB37-545 200RPM
-#define ENCODER_PPR       7.0f     // MY-37 pulses per motor shaft rotation
-// Counts per wheel revolution (single edge, one channel)
-#define COUNTS_PER_REV    (ENCODER_PPR * GEAR_RATIO)   // 7 PPR × ~100 gear ratio
+#define GEAR_RATIO        99.5f    // TQ42-775 60RPM — actual datasheet gear ratio
+#define ENCODER_PPR       7.0f     // MY-37 pulses per motor shaft rotation (7 PPR, 2-channel)
+// Counts per wheel revolution.
+// ISR triggers on CHANGE (rising + falling) of channel A only → 2× counting.
+// 7 PPR × 2 edges × 99.5 gear ratio = 1393 counts/rev.
+// If you later switch to X4 (CHANGE on both channels), multiply by 4 instead of 2 → 2786.
+#define COUNTS_PER_REV    (ENCODER_PPR * 2.0f * GEAR_RATIO)   // 7 × 2 × 99.5 = 1393
 
 // ═══════════════════════════════════════════════════════
 //  BTS7960 motor driver pins
@@ -31,10 +34,10 @@
 // ═══════════════════════════════════════════════════════
 //  Encoder pins (interrupt-capable GPIO on ESP32)
 // ═══════════════════════════════════════════════════════
-#define LEFT_ENC_A   18   // left wheel encoder signal
-#define RIGHT_ENC_A  19   // right wheel encoder signal
-#define LEFT_ENC_B   16
-#define RIGHT_ENC_B  17
+#define LEFT_ENC_A   18   // left wheel encoder channel A — interrupt pin
+#define RIGHT_ENC_A  19   // right wheel encoder channel A — interrupt pin
+#define LEFT_ENC_B   16   // left wheel encoder channel B — direction detection
+#define RIGHT_ENC_B  17   // right wheel encoder channel B — direction detection
 
 // ═══════════════════════════════════════════════════════
 //  MPU-6050 I2C
@@ -50,8 +53,9 @@
 // ═══════════════════════════════════════════════════════
 //  PID gains — starting values for real hardware tuning
 //
-//  YOUR ENCODER: MY-37 = 7 PPR × gear ratio 100 = 700 counts/rev
-//  That gives ~2.2mm per tick at the wheel — decent but not fine.
+//  YOUR ENCODER: TQ42-775 = 7 PPR × 2 edges (CHANGE mode) × 99.5 gear ratio
+//                         = 1393 counts/rev
+//  That gives ~0.36mm per tick at the wheel (160mm diameter) — good resolution.
 //
 //  TUNING ORDER (do not skip steps):
 //
@@ -68,8 +72,9 @@
 //    If robot overshoots and keeps oscillating → reduce Ki.
 //
 //  Step 3 — Add Kd only if overshoot is still visible after Ki is set
-//    Start at Kd = 0.5. MY-37 noise between ticks can make large Kd values
-//    cause jitter, so keep it small.
+//    Start at Kd = 0.5. The gearbox backlash and inter-tick noise on this
+//    motor can make large Kd values cause jitter, so keep it small (0.5–2.0).
+//    If jitter appears → set Kd back to 0.
 //
 //  These defaults are safe starting values (P-only, no drive output).
 //  Change them via /pid_gains topic from rqt during testing, then

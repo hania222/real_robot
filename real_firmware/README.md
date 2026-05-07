@@ -1,5 +1,4 @@
 # real_firmware — ESP32 Arduino Firmware
-
 ## Arduino IDE Setup
 | Item | Version |
 |---|---|
@@ -17,7 +16,6 @@ Download jazzy .ZIP from: `https://github.com/micro-ROS/micro_ros_arduino/releas
 Arduino IDE → Sketch → Include Library → Add .ZIP Library
 
 ## Wiring
-
 ### BTS7960 — Left Motor
 | BTS7960 Pin | ESP32 GPIO |
 |---|---|
@@ -38,13 +36,21 @@ Arduino IDE → Sketch → Include Library → Add .ZIP Library
 | VCC  | 5V |
 | GND  | GND |
 
-### Encoders (MY-37)
-| Signal | ESP32 GPIO |
-|---|---|
-| Left encoder  | 18 |
-| Right encoder | 19 |
-| VCC | 3.3V |
-| GND | GND |
+### Encoders (TQ42-775 — 7 PPR, 2-channel)
+Both channels must be wired. Channel A triggers the interrupt (CHANGE mode — both edges),
+Channel B is read inside the ISR to determine direction. If Channel B is not wired,
+direction detection fails and ticks will cancel out to near zero.
+
+Effective resolution: 7 PPR × 2 edges × 99.5 gear ratio = **1393 counts/rev** per wheel.
+
+| Signal          | ESP32 GPIO |
+|-----------------|------------|
+| Left encoder A  | 18         |
+| Left encoder B  | 16         |
+| Right encoder A | 19         |
+| Right encoder B | 17         |
+| VCC             | 3.3V       |
+| GND             | GND        |
 
 ### MPU-6050
 | MPU Pin | ESP32 GPIO |
@@ -59,14 +65,11 @@ USB cable from ESP32 Dev Module to Pi 5 USB port
 
 ## udev Rules (run on Pi 5)
 Gives fixed device names regardless of plug order:
-
 ```bash
 # Find device IDs
 udevadm info -a -n /dev/ttyUSB0 | grep idVendor
 udevadm info -a -n /dev/ttyUSB1 | grep idVendor
-
-# reate rules file
+# Create rules file
 sudo nano /etc/udev/rules.d/99-robot.rules
 ```
-
- (replace idVendor/idProduct with actual values):
+(replace idVendor/idProduct with actual values):
