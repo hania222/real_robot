@@ -31,6 +31,7 @@ setup(
         'console_scripts': [
             'joystick_ws_node = real_bringup.joystick_ws_node:main',
             'twist_to_twiststamped = real_bringup.twist_to_twiststamped:main',
+            'diff_drive_sim_node = real_bringup.diff_drive_sim_node:main',
         ],
     },
 )

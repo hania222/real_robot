@@ -12,6 +12,9 @@
 //              /pid_gains        (std_msgs/String)
 //                           format: "kp_l:1.0 ki_l:0.0 kd_l:0.0
 //                                    kp_r:1.0 ki_r:0.0 kd_r:0.0"
+//  closed loop control: cmd--> target speed
+//                       encoders-->actual speed
+//                       PID-->computes PWm 
 // ═══════════════════════════════════════════════════════
 
 #include <micro_ros_arduino.h>
@@ -33,10 +36,10 @@
 #include "config.h"
 
 // ── micro-ROS variables─────────────────────────────────
-rcl_node_t            node;
+rcl_node_t            node;       //ros2 node object (equivalent to rclpy.create_node())
 rcl_allocator_t       allocator; // for dynamic memory management in ROS 2
 rclc_support_t        support;  //for init and shutdown of ROS context
-rclc_executor_t       executor; //run callbacks + timers
+rclc_executor_t       executor;//run callbacks + timers +subscriptions (equivalent to rclpy.spin(node))
 
 // Publishers and subscriber from micro-ROS node
 rcl_publisher_t       odom_pub;
@@ -61,7 +64,7 @@ std_msgs__msg__Float32MultiArray  debug_msg;
 float                             debug_data[8];
 
 // gains_msg receives plain text like "kp_l:1.5 ki_l:0.1 kd_l:0.0 ..."
-// from rqt Topic Publisher so you can retune without reflashing
+// from rqt Topic Publisher so can retune without reflashing
 std_msgs__msg__String             gains_msg;
 char                              gains_buf[128];
 
@@ -72,7 +75,7 @@ volatile long right_ticks = 0;
 // ── robot position variables ────────────────────────────────────
 float pos_x   = 0.0f;
 float pos_y   = 0.0f;
-float heading = 0.0f;   // direction (radians)
+float heading = 0.0f;   // yaw angle (radians)
 
 //previous encoder ticks for odometry calculation
 long  last_left_ticks  = 0; 
@@ -84,9 +87,6 @@ float cmd_angular = 0.0f;      //rotational speed in rad/s
 unsigned long last_cmd_ms = 0; //last time cmd_vel recieved
 
 // ── PID target wheel velocities (set in cmd_vel_callback, used in odom_timer) ───
-// Previously the callback set the motors directly (open loop).
-// Now it only stores the desired speed; the odom timer closes the loop
-// by comparing this target against the encoder-measured actual speed.
 float target_v_left  = 0.0f;
 float target_v_right = 0.0f;
 
@@ -99,10 +99,10 @@ float pid_prev_error_left  = 0.0f;
 float pid_prev_error_right = 0.0f;
 
 // ── Live-tunable PID gains ────────────────────────────────────────────────────
-// Initialised from config.h but can be updated at runtime via /pid_gains topic.
+// Initialised from config.h but can be updated at runtime via /pid_gains topic
 // Start with only Kp, keep Ki and Kd at 0 until Kp is stable.
-// MY-37 is 7 PPR × 100 gear ratio = 700 counts/rev — decent resolution,
-// but Kd still amplifies inter-tick noise so leave it 0 for now.
+// TQ42-775 is 7 PPR × 2 edges (CHANGE mode) × 99.5 gear ratio = 1393 counts/rev —
+// Kd still amplifies inter-tick noise and gearbox backlash ,so leave it 0 until Kp and Ki are fully tuned
 volatile float live_kp_left  = KP_LEFT;
 volatile float live_ki_left  = KI_LEFT;
 volatile float live_kd_left  = KD_LEFT;
@@ -120,31 +120,36 @@ rosidl_runtime_c__String js_names[2]; //ros string type for joint names
 char    js_name0[] = "left_wheel";
 char    js_name1[] = "right_wheel";
 
-// ═══════════════════════════════════════════════════════
+
 //  Encoder ISRs
 //  ESP32 has two types of RAMS (Flash(slow) and IRAM(fast)) and ISRs must be in IRAM to run fast and correctly
-//  Channel A triggers the interrupt, Channel B is read to determine direction:
-//  If B is HIGH when A rises  → forward  → increment ticks
-//  If B is LOW  when A rises  → backward → decrement ticks
-// ═══════════════════════════════════════════════════════
+//  ISR triggers on CHANGE (both rising and falling edges of channel A) → 2× counting
+//  This doubles resolution to 1393 counts/rev vs 696 with rising only
+//  Channel B is read to determine direction:
+//  On a RISING edge of A: if B is HIGH → forward, if B is LOW → backward.
+//  On a FALLING edge of A: direction logic inverts — if B is LOW → forward, if B is HIGH → backward
 void IRAM_ATTR left_enc_isr() {
-    if (digitalRead(LEFT_ENC_B) == HIGH)
+    bool a = digitalRead(LEFT_ENC_A);
+    bool b = digitalRead(LEFT_ENC_B);
+    // XOR gives correct direction for both rising and falling edges of A
+    if (a == b)
         left_ticks++;   // forward
     else
         left_ticks--;   // backward
 }
 
 void IRAM_ATTR right_enc_isr() {
-    if (digitalRead(RIGHT_ENC_B) == HIGH)
+    bool a = digitalRead(RIGHT_ENC_A);
+    bool b = digitalRead(RIGHT_ENC_B);
+    // XOR gives correct direction for both rising and falling edges of A
+    if (a == b)
         right_ticks++;  // forward
     else
         right_ticks--;  // backward
 }
 
-// ══════════════════════════════════════════════════════
 //  Motor control — BTS7960
 //  takes speed values: -255 to +255
-// ═══════════════════════════════════════════════════════
 void set_motor_left(int speed) {
     if (speed >= 0) {
         //forward and set reverse PWM to 0
@@ -171,39 +176,33 @@ void stop_motors() {
     analogWrite(R_RPWM, 0); analogWrite(R_LPWM, 0);
 }
 
-// ═══════════════════════════════════════════════════════
+
 //  PID computation — called once per wheel per odom tick
-//
+
 //  target   = desired wheel speed  (m/s)
 //  actual   = encoder-measured speed (m/s)
 //  kp/ki/kd = gains
 //  integral / prev_error = persistent state between calls
-//  dt       = time step in seconds (= ODOM_PUBLISH_MS / 1000)
+//  dt = time step in seconds (= ODOM_PUBLISH_MS / 1000)
 //
 //  Returns a PWM value in the range [PID_MIN_OUTPUT, PID_MAX_OUTPUT]
 //
 //  Tuning order:
 //    1. Kp only (Ki=Kd=0) — raise until robot reaches target, back off if it oscillates
 //    2. Ki only after Kp is stable — eliminates steady-state speed error
-//    3. Kd last and only if overshoot remains — start very small (0.01)
-// ═══════════════════════════════════════════════════════
-float compute_pid(float target, float actual,
-                  float kp, float ki, float kd,
-                  float &integral, float &prev_error,
-                  float dt) {
+//    3. Kd last and only if overshoot remains — start very small (0.5)
+float compute_pid(float target, float actual, float kp, float ki, float kd, float &integral, float &prev_error, float dt) {
 
     float error      = target - actual;          // how far off we are right now
     integral        += error * dt;               // accumulate over time
     float derivative = (error - prev_error) / dt; // rate of change of error
     prev_error       = error;
 
-    // Anti-windup: clamp integral so it can never push output beyond limits.
-    // Avoids the robot surging after a long stop where integral built up.
-    // Guard against divide-by-zero when Ki is 0
+    // Anti-windup:prevents integral from growing forever
+    // avoids the robot surging after a long stop where integral built up
+    // guard against divide by 0 when Ki is 0
     if (ki > 1e-6f) {
-        integral = constrain(integral,
-                             PID_MIN_OUTPUT / ki,
-                             PID_MAX_OUTPUT / ki);
+        integral = constrain(integral, PID_MIN_OUTPUT / ki, PID_MAX_OUTPUT / ki);
     } else {
         integral = 0.0f; // no point accumulating if Ki is off
     }
@@ -212,13 +211,10 @@ float compute_pid(float target, float actual,
     return constrain(output, PID_MIN_OUTPUT, PID_MAX_OUTPUT);
 }
 
-// ═══════════════════════════════════════════════════════
-//  /pid_gains callback
-//  Receives a plain string from rqt Topic Publisher, e.g.:
-//    "kp_l:1.5 ki_l:0.1 kd_l:0.0 kp_r:1.5 ki_r:0.1 kd_r:0.0"
-//  Updates live gains immediately without reflashing.
-//  Also resets integrals so old accumulated error doesn't spike the motors.
-// ═══════════════════════════════════════════════════════
+//  /pid_gains callback (runs when ROS send new PID)
+//  Receives a plain string from rqt Topic Publisher, e.g.:"kp_l:1.5 ki_l:0.1 kd_l:0.0 kp_r:1.5 ki_r:0.1 kd_r:0.0"
+//  Updates live gains immediately without reflashing the esp32
+//  also resets integrals so old accumulated error doesn't spike the motors
 void gains_callback(const void * msg_in) {
     const std_msgs__msg__String * m =
         (const std_msgs__msg__String *)msg_in;
@@ -233,31 +229,25 @@ void gains_callback(const void * msg_in) {
     pid_integral_right = 0.0f;
 }
 
-// ═══════════════════════════════════════════════════════
+
 //  cmd_vel callback
-//  Previously this did open-loop PWM directly.
-//  Now it only stores the desired wheel speeds (targets).
 //  The actual motor drive happens inside odom_timer_callback
-//  where encoder feedback is available to close the loop.
-// ═══════════════════════════════════════════════════════
+//  where encoder feedback is available to close the loop
 void cmd_vel_callback(const void * msg_in) {
     //convert raw pointer to ROS message type
     const geometry_msgs__msg__TwistStamped * msg =
         (const geometry_msgs__msg__TwistStamped *)msg_in;
 
-    cmd_linear  = msg->twist.linear.x; //read forward speed from message
+    cmd_linear  = -msg->twist.linear.x; //read forward speed from message (-ve to revrse direction)
     cmd_angular = msg->twist.angular.z; //read rotational speed from message
     last_cmd_ms = millis();             //store current time
 
-    // Differential drive velocity → wheel speeds (m/s)
-    // These are now stored as PID targets, not converted to PWM directly
+    // Differential drive velocity → wheel speeds (m/s
     target_v_left  = cmd_linear - (cmd_angular * WHEEL_BASE / 2.0f);
     target_v_right = cmd_linear + (cmd_angular * WHEEL_BASE / 2.0f);
 }
 
-// ═══════════════════════════════════════════════════════
 //  Odometry timer callback — runs at 20 Hz
-// ═══════════════════════════════════════════════════════
 void odom_timer_callback(rcl_timer_t * timer, int64_t /*last_call*/) {
     if (timer == NULL) return;
 
@@ -266,7 +256,7 @@ void odom_timer_callback(rcl_timer_t * timer, int64_t /*last_call*/) {
         stop_motors();
         cmd_linear       = 0.0f;
         cmd_angular      = 0.0f;
-        target_v_left    = 0.0f;   // clear PID targets so loop doesn't keep driving
+        target_v_left    = 0.0f;   //clear PID targets so loop doesn't keepdriving
         target_v_right   = 0.0f;
         pid_integral_left  = 0.0f; // reset integrals so there's no wind-up on restart
         pid_integral_right = 0.0f;
@@ -299,7 +289,6 @@ void odom_timer_callback(rcl_timer_t * timer, int64_t /*last_call*/) {
 
     // ── PID motor drive ───────────────────────────────
     // Only run PID when a fresh command is active; timeout branch above
-    // already called stop_motors() so we skip this block after timeout.
     float pwm_left  = 0.0f;
     float pwm_right = 0.0f;
 
@@ -322,16 +311,16 @@ void odom_timer_callback(rcl_timer_t * timer, int64_t /*last_call*/) {
 
     // ── Publish /pid_debug so PlotJuggler can graph it ──
     // Open PlotJuggler → Start → ROS2 Topic Subscriber → pick /pid_debug
-    // Drag data[0] and data[1] onto the same panel to see target vs actual
-    // for the left wheel. data[4] vs data[5] for the right wheel.
-    // data[2] and data[6] show the error converging to zero when tuned well.
-    debug_data[0] = target_v_left;            // what we asked for (left)
-    debug_data[1] = actual_v_left;            // what encoder says we got (left)
-    debug_data[2] = target_v_left - actual_v_left;  // error (left)
-    debug_data[3] = pwm_left;                 // PWM the PID output (left)
-    debug_data[4] = target_v_right;           // what we asked for (right)
-    debug_data[5] = actual_v_right;           // what encoder says we got (right)
-    debug_data[6] = target_v_right - actual_v_right; // error (right)
+    //Drag data[0] and data[1] onto the same panel to see target vs actual
+    //for the left wheel. data[4] vs data[5] for the right wheel
+    // data[2] and data[6] show the error converging to zero when tuned well
+    debug_data[0] = target_v_left;       
+    debug_data[1] = actual_v_left;           
+    debug_data[2] = target_v_left - actual_v_left;  
+    debug_data[3] = pwm_left;               //PWM the PID output (left)  
+    debug_data[4] = target_v_right;           
+    debug_data[5] = actual_v_right;          
+    debug_data[6] = target_v_right - actual_v_right;
     debug_data[7] = pwm_right;                // PWM the PID output (right)
     rcl_publish(&debug_pub, &debug_msg, NULL);
 
@@ -340,7 +329,7 @@ void odom_timer_callback(rcl_timer_t * timer, int64_t /*last_call*/) {
     float d_heading = (dr - dl) / WHEEL_BASE; //how much robot rotated (radians)
 
     //robot keeps updating its x and y position , and rotation over time and we use that to calculate the change in x and y position based on the distance it has moved forward (d_centre) and its current heading
-    heading += d_heading;
+    heading += d_heading;                  //yaw 
     pos_x   += d_centre * cosf(heading);  //cosine is the horizontal component of the movement
     pos_y   += d_centre * sinf(heading);  //sine is the vertical component of the movement
 
@@ -358,7 +347,7 @@ void odom_timer_callback(rcl_timer_t * timer, int64_t /*last_call*/) {
     int32_t sec    = (int32_t)(now_ns / 1000000000LL);
     uint32_t nsec  = (uint32_t)(now_ns % 1000000000LL);
 
-    // ── Publish /odom ──────────────────────────────────
+    // Publish /odom 
     //attach time to this message and fill in the position and velocity data
     odom_msg.header.stamp.sec     = sec;
     odom_msg.header.stamp.nanosec = nsec;
@@ -367,7 +356,7 @@ void odom_timer_callback(rcl_timer_t * timer, int64_t /*last_call*/) {
 
     // Heading → quaternion (yaw only, 2D robot)
     //quaternion are 4 numbers (x, y, z, w)--> represent rotation in 3D space
-    odom_msg.pose.pose.orientation.z = sinf(heading / 2.0f);
+    odom_msg.pose.pose.orientation.z = sinf(heading /2.0f);
     odom_msg.pose.pose.orientation.w = cosf(heading / 2.0f);
     odom_msg.pose.pose.orientation.x = 0.0f;
     odom_msg.pose.pose.orientation.y = 0.0f;
@@ -377,7 +366,7 @@ void odom_timer_callback(rcl_timer_t * timer, int64_t /*last_call*/) {
 
     rcl_publish(&odom_pub, &odom_msg, NULL);
 
-    // ── Publish /joint_states ──────────────────────────
+    //Publish /joint_states 
     joint_msg.header.stamp.sec     = sec;
     joint_msg.header.stamp.nanosec = nsec;
     joint_msg.position.data        = js_positions;
@@ -386,9 +375,8 @@ void odom_timer_callback(rcl_timer_t * timer, int64_t /*last_call*/) {
     rcl_publish(&joint_pub, &joint_msg, NULL);
 }
 
-// ═══════════════════════════════════════════════════════
+
 //  IMU timer callback — runs at 50 Hz (50 times /sec)
-// ═══════════════════════════════════════════════════════
 void imu_timer_callback(rcl_timer_t * timer, int64_t /*last_call*/) {
     if (timer == NULL) return;
 
@@ -429,14 +417,14 @@ void imu_timer_callback(rcl_timer_t * timer, int64_t /*last_call*/) {
     rcl_publish(&imu_pub, &imu_msg, NULL);
 }
 
-// ═══════════════════════════════════════════════════════
-//  setup() does 5 main things
+
+//  setup(), is doing 5 main things:
 // 1.connect ESP32 to micro-ROS agent via serial
 // 2.initialize hardware (motors, encoders, IMU)
 // 3.create micro-Ros node
 // 4.create publishers + subscribers (added debug_pub and gains_sub for PID tuning)
 // 5.create timers + executor for callbacks(scheduler for when to run the code in the callbacks)
-// ═════════════════════════════════════
+
 void setup() {
 
     // ── Serial for micro-ROS ───────────────────────────
@@ -460,8 +448,10 @@ void setup() {
     pinMode(LEFT_ENC_B,  INPUT_PULLUP);  //Channel B for left encoder direction detection
     pinMode(RIGHT_ENC_A, INPUT_PULLUP);
     pinMode(RIGHT_ENC_B, INPUT_PULLUP);  //Channel B for right encoder direction detection
-    attachInterrupt(digitalPinToInterrupt(LEFT_ENC_A),  left_enc_isr,  RISING); //every time signal goes from low->high it calls left_enc_isr() function, which reads B to determine direction
-    attachInterrupt(digitalPinToInterrupt(RIGHT_ENC_A), right_enc_isr, RISING);
+    // CHANGE mode: triggers on both rising AND falling edges of channel A
+    // The ISR reads both A and B to determine direction correctly on each edge.
+    attachInterrupt(digitalPinToInterrupt(LEFT_ENC_A),  left_enc_isr,  CHANGE);
+    attachInterrupt(digitalPinToInterrupt(RIGHT_ENC_A), right_enc_isr, CHANGE);
 
     // ── MPU-6050 ───────────────────────────────────────
     Wire.begin(IMU_SDA, IMU_SCL); //Initialize I2C communication for the IMU
@@ -559,20 +549,19 @@ void setup() {
     joint_msg.header.frame_id.data    = chassis_frame;
     joint_msg.header.frame_id.size    = strlen(chassis_frame);
 
-    // ── debug message array setup ─────────────────────
+    // debug message array setup
     // wire the float array into the ROS message once here;
     // odom_timer just writes into debug_data[] and publishes
     debug_msg.data.data     = debug_data;
     debug_msg.data.size     = 8;
     debug_msg.data.capacity = 8;
 
-    // ── gains message buffer setup ────────────────────
+    //gains message buffer setup
     gains_msg.data.data     = gains_buf;
     gains_msg.data.capacity = 128;
     gains_msg.data.size     = 0;
 
-    // ── Executor(Brain) — 5 handles: 2 timers + 2 subscribers ─
-    // Increased from 3 to 5 to add debug_pub (no handle) and gains_sub (1 handle)
+    // Executor(Brain) — 5 handles: 2 timers + 2 subscribers 
     // Note: publishers don't consume executor handles, only timers and subscribers do
     rclc_executor_init(&executor, &support.context, 4, &allocator);
     rclc_executor_add_timer(&executor, &odom_timer);
