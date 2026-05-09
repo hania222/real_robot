@@ -409,7 +409,7 @@ void imu_timer_callback(rcl_timer_t * timer, int64_t /*last_call*/) {
     imu_msg.orientation.y = 0.0f;
     imu_msg.orientation.z = 0.0f;
 
-    // -1 = covariance unknown
+    // -1 = covariance unknown, represents uncertainty/noise estimate
     imu_msg.orientation_covariance[0]         = -1.0f;
     imu_msg.angular_velocity_covariance[0]    =  0.02f;
     imu_msg.linear_acceleration_covariance[0] =  0.04f;
