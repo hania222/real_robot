@@ -12,7 +12,7 @@ def generate_launch_description():
     pkg_bringup = get_package_share_directory('real_bringup')
 
     # Read URDF directly
-    urdf_path = os.path.join(pkg_desc, 'urdf', 'Wheeled_Base.urdf')
+    urdf_path = os.path.join(pkg_desc, 'urdf', 'Robot_Final.urdf')
     with open(urdf_path, 'r') as f:
         robot_description = f.read()
 
@@ -43,7 +43,7 @@ def generate_launch_description():
         parameters=[{
             'serial_port':      '/dev/ttyUSB0',
             'serial_baudrate':  115200,
-            'frame_id':         'lidar_link',
+            'frame_id':         'LIDAR',
             'angle_compensate': True,
             'scan_mode':        'Standard',
         }],

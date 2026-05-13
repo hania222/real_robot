@@ -32,6 +32,8 @@ setup(
             'joystick_ws_node = real_bringup.joystick_ws_node:main',
             'twist_to_twiststamped = real_bringup.twist_to_twiststamped:main',
             'diff_drive_sim_node = real_bringup.diff_drive_sim_node:main',
+            'fake_robot = real_bringup.fake_robot:main',
+            'step_tester = real_bringup.step_tester:main',
         ],
     },
 )

@@ -1,23 +1,23 @@
 ### robot_localization EKF node config
 ### Fuses wheel odometry (/odom) + IMU (/imu/data)
-### Output: /odometry/filtered  →  consumed by Nav2
+### output: /odometry/filtered, used by Nav2
 
 ekf_filter_node:
   ros__parameters:
 
     frequency: 30.0          # Hz — how often EKF publishes
     sensor_timeout: 0.1      # if no sensor update for 0.1 sec, ignore that sensor
-    two_d_mode: true         # we're a ground robot — ignore Z, roll, pitch
-    publish_tf: true         # publishes odom → base_link (CHASSIS) TF
+    two_d_mode: true         # we're a ground robot -> ignore Z, roll, pitch
+    publish_tf: true         # publishes odom -> base_link (CHASSIS) TF
     publish_acceleration: false
 
     # Frame definitions
     map_frame:      map
     odom_frame:     odom
-    base_link_frame: CHASSIS   # must match your URDF root link
+    base_link_frame: CHASSIS   
     world_frame:    odom       # EKF works in odom frame (not map)
 
-    # ── Odometry comes from ESP32 encoder calculations ──────────────────────
+    #Odometry comes from ESP32 encoder calculations
     odom0: /odom
     # What to fuse from /odom:
     # [x,  y,  z,
@@ -30,20 +30,20 @@ ekf_filter_node:
                    true,  false, false,
                    false, false, true,
                    false, false, false]
-    odom0_differential: false   #Is this sensor giving CHANGE or ABSOLUTE value(false)?
+    odom0_differential: false   #Is this sensor giving CHANGE(true) or ABSOLUTE value(false)?
     odom0_relative: false       #Is data relative to starting point?(false) or does it drift over time(true)?
     odom0_queue_size: 10        # store last 10 messages
 
-    # ── IMU from ESP32 MPU-6050 ───────────────────────────
+    # IMU from ESP32 MPU-6050
     imu0: /imu/data
-    # Fuse only yaw rate (gyro) (how fast the robot rotates) from IMU — most reliable part of MPU-6050
+    # Fuse only yaw rate (gyro) (how fast the robot rotates) from IMU (most reliable part of MPU-6050)
     imu0_config: [false, false, false,
                   false, false, false,
                   false, false, false,
                   false, false, true,
                   false, false, false]
     imu0_differential: false
-    imu0_relative: true        # MPU-6050 has no absolute heading reference(yaw drifts over time) → treat as relative
+    imu0_relative: true        # MPU-6050 has no absolute heading reference(yaw drifts over time)( treat as relative)
     imu0_queue_size: 10
     imu0_remove_gravitational_acceleration: false  #removes gravity from linear acceleration data (not needed since we're not fusing linear accel)
 

@@ -13,11 +13,4 @@ def generate_launch_description():
             output='screen',
         ),
 
-        # Converts Twist → TwistStamped for ESP32
-        Node(
-            package='real_bringup',
-            executable='twist_to_twiststamped',
-            name='twist_to_twiststamped',
-            output='screen',
-        ),
     ])

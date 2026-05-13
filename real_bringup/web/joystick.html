@@ -208,11 +208,11 @@
     </div>
   </div>
 
+  //update it after setting max and mini values
+  <div class="footer">MAX VEL 0.84 m/s · 1.5 rad/s · 20 Hz</div>
 
-  <div class="footer">MAX VEL 1.0 m/s · 1.5 rad/s · 20 Hz</div>
-
-  <script>
-    const MAX_LINEAR  = 1.0;
+  <script>// Define maximum linear and angular velocities for scaling the joystick input
+    const MAX_LINEAR  = 0.84;
     const MAX_ANGULAR = 1.5;
 
     const connBar  = document.getElementById('connBar');
