@@ -36,10 +36,10 @@ Arduino IDE → Sketch → Include Library → Add .ZIP Library
 | VCC  | 5V |
 | GND  | GND |
 
-### Encoders (TQ42-775 — 12 PPR, 2-channel)
+### Encoders (JGB37 — 12 PPR, 2-channel)
 The ISR reads both A and B on every CHANGE edge to determine direction
 
-Effective resolution: 12 PPR × **4 edges** (X4 quadrature) × 99.5 gear ratio = **4776 counts/rev** per wheel
+Effective resolution: 7 PPR × **4 edges** (X4 quadrature) × 30 gear ratio = **4776 counts/rev** per wheel
 Tick distance: 2π × 0.08 m / 4776 ≈ **0.11 mm per tick**.
 
 | Signal          | ESP32 GPIO |
@@ -177,10 +177,10 @@ re-armed on every gain change so there is no derivative spike after retuning.
 1. **Kp only** (Ki=0, Kd=0), Command 0.2 m/s. Raise Kp until the robot reaches
    ~90% of target speed. Starting range: 80–150.back off if speed oscillates
 2. **Ki** after Kp is stable. Start at 0.5. Watch `/pid_debug` `data[2]` converge
-   to zero in PlotJuggler. Reduce if overshoot appears.
+   to zero in PlotJuggler. Reduce if overshoot appears
 3. **Kd** last  one, only if overshoot remains. Start at 0.5. X4 encoding gives a
    smoother velocity signal so Kd up to ~2.0 is tolerable. Keep it small —
-   gearbox backlash still injects noise.
+   gearbox backlash still injects noise
 
 Write final values back into `config.h` (`KP_LEFT`, `KI_LEFT`, etc.) so they
 survive a power cycle.

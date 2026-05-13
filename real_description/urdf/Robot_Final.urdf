@@ -1,0 +1,315 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot name="Robot_Final">
+  <link name="CHASSIS">
+    <inertial>
+      <origin xyz="0.148972616629833 8.59131719513906E-05 0.037381334125696" rpy="0 0 0" />
+      <mass value="5.23357376650206" />
+      <inertia ixx="0.0475570522036204" ixy="1.29200142326392E-08" ixz="-4.95874451589697E-08"
+               iyy="0.0782814898121404" iyz="-3.14872308343999E-10" izz="0.123239623540182" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/CHASSIS.STL" /></geometry>
+      <material name=""><color rgba="0.866666666666667 0.909803921568627 1 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/CHASSIS.STL" /></geometry>
+    </collision>
+  </link>
+ <!--FRONT LEFT CASTER-->
+  <link name="FL_swivel">
+    <inertial>
+      <origin xyz="-0.0225271927865878 8.25455349966892E-06 -0.0150973351650807" rpy="0 0 0" />
+      <mass value="0.080127289502846" />
+      <inertia ixx="2.04328866782325E-05" ixy="1.02624903669851E-07" ixz="-1.06256948830954E-06"
+               iyy="2.23548810848655E-05" iyz="2.04834207339686E-07" izz="1.69630328051252E-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/FL_swivel.STL" /></geometry>
+      <material name=""><color rgba="0.388235294117647 0.419607843137255 0.388235294117647 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/FL_swivel.STL" /></geometry>
+    </collision>
+  </link>
+  <joint name="fl_swivel" type="continuous">
+    <origin xyz="0.34749994000006 0.238309957246437 -0.0550828883294601" rpy="1.5707963267949 -1.5707963267949 0" />
+    <parent link="CHASSIS" />
+    <child link="FL_swivel" />
+    <axis xyz="-1 0 0" />
+  </joint>
+
+  <link name="FL_roll">
+    <inertial>
+      <origin xyz="0 1.38777878078145E-17 0" rpy="0 0 0" />
+      <mass value="0.0472944068607781" />
+      <inertia ixx="1.41883783502069E-05" ixy="4.44149907162492E-23" ixz="-6.88214269644119E-22"
+               iyy="9.50735464480305E-06" iyz="1.86774448194512E-21" izz="9.50735464480305E-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/FL_roll.STL" /></geometry>
+      <material name=""><color rgba="0.294117647058824 0.294117647058824 0.294117647058824 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/FL_roll.STL" /></geometry>
+    </collision>
+  </link>
+  <joint name="fl_roll" type="continuous">
+    <origin xyz="-0.0369999999999996 0.000959824507810431 -0.0229799638144681" rpy="0 0.0417436225359922 -1.57079632679489" />
+    <parent link="FL_swivel" />
+    <child link="FL_roll" />
+    <axis xyz="1 0 0" />
+  </joint>
+
+<!--FRONT RIGHT CASTER-->
+  <link name="FR_swivel">
+    <inertial>
+      <origin xyz="-0.0355271927865884 8.25455350048077E-06 -0.0150973351650687" rpy="0 0 0" />
+      <mass value="0.0801272895028461" />
+      <inertia ixx="2.04328866782326E-05" ixy="1.02624903669874E-07" ixz="-1.06256948830954E-06"
+               iyy="2.23548810848655E-05" iyz="2.04834207339691E-07" izz="1.69630328051252E-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/FR_swivel.STL" /></geometry>
+      <material name=""><color rgba="0.388235294117647 0.419607843137255 0.388235294117647 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/FR_swivel.STL" /></geometry>
+    </collision>
+  </link>
+  <joint name="fr_swivel" type="continuous">
+    <origin xyz="0.347499940000059 -0.238309957200129 -0.0420828883294584" rpy="1.5707963267949 -1.5707963267949 0" />
+    <parent link="CHASSIS" />
+    <child link="FR_swivel" />
+    <axis xyz="1 0 0" />
+  </joint>
+
+  <link name="FR_roll">
+    <inertial>
+      <origin xyz="-1.38777878078145E-17 0 0" rpy="0 0 0" />
+      <mass value="0.0472944068607781" />
+      <inertia ixx="1.41883783502069E-05" ixy="-2.74902241208646E-22" ixz="-7.94093388050907E-22"
+               iyy="9.50735464480305E-06" iyz="-1.06863102662723E-21" izz="9.50735464480305E-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/FR_roll.STL" /></geometry>
+      <material name=""><color rgba="0.294117647058824 0.294117647058824 0.294117647058824 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/FR_roll.STL" /></geometry>
+    </collision>
+  </link>
+  <joint name="fr_roll" type="continuous">
+    <origin xyz="-0.0500000000000001 0.000959824507811236 -0.0229799638144561" rpy="3.14159265358979 -0.0417436225359922 1.5707963267949" />
+    <parent link="FR_swivel" />
+    <child link="FR_roll" />
+    <axis xyz="1 0 0" />
+  </joint>
+
+<!--REAR LEFT CASTER-->
+  <link name="RL_swivel">
+    <inertial>
+      <origin xyz="0.695215418771256 0.00502743200085908 0.0320864502764693" rpy="0 0 0" />
+      <mass value="0.0606861535098016" />
+      <inertia ixx="1.84920412193494E-05" ixy="-5.81928842027952E-08" ixz="-1.30866531976875E-08"
+               iyy="1.41593687366366E-05" iyz="-1.06592653432018E-06" izz="1.38921500597451E-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/RL_swivel.STL" /></geometry>
+      <material name=""><color rgba="0.388235294117647 0.419607843137255 0.388235294117647 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/RL_swivel.STL" /></geometry>
+    </collision>
+  </link>
+  <joint name="rl_swivel" type="continuous">
+    <origin xyz="0.348459764507871 0.215329993431968 -0.0920828883294597" rpy="1.5707963267949 0 -3.0998490310538" />
+    <parent link="CHASSIS" />
+    <child link="RL_swivel" />
+    <axis xyz="0 1 0" />
+  </joint>
+
+  <link name="RL_roll">
+    <inertial>
+      <origin xyz="0 1.38777878078145E-17 0" rpy="0 0 0" />
+      <mass value="0.0472944068607779" />
+      <inertia ixx="1.41883783502068E-05" ixy="3.83019243189107E-22" ixz="-2.11758236813575E-22"
+               iyy="9.50735464480297E-06" iyz="-2.03198382074269E-21" izz="9.50735464480297E-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/RL_roll.STL" /></geometry>
+      <material name=""><color rgba="0.294117647058824 0.294117647058824 0.294117647058824 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/RL_roll.STL" /></geometry>
+    </collision>
+  </link>
+  <joint name="rl_roll" type="continuous">
+    <origin xyz="0.694394438846155 0 0.0290033877282606" rpy="3.14159265358979 0 3.14159265358979" />
+    <parent link="RL_swivel" />
+    <child link="RL_roll" />
+    <axis xyz="1 0 0" />
+  </joint>
+
+<!--REAR RIGHT CASTER-->
+  <link name="RR_swivel">
+    <inertial>
+      <origin xyz="-0.035527192786591 -8.25455350095261E-06 0.0150973351650685" rpy="0 0 0" />
+      <mass value="0.080127289502846" />
+      <inertia ixx="2.04328866782326E-05" ixy="-1.02624903669911E-07" ixz="1.06256948830962E-06"
+               iyy="2.23548810848656E-05" iyz="2.04834207339678E-07" izz="1.69630328051252E-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/RR_swivel.STL" /></geometry>
+      <material name=""><color rgba="0.388235294117647 0.419607843137255 0.388235294117647 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/RR_swivel.STL" /></geometry>
+    </collision>
+  </link>
+  <joint name="rr_swivel" type="continuous">
+    <origin xyz="-0.347499940000062 -0.238309957200129 -0.0420828883294612" rpy="1.5707963267949 -1.5707963267949 0" />
+    <parent link="CHASSIS" />
+    <child link="RR_swivel" />
+    <axis xyz="1 0 0" />
+  </joint>
+
+  <link name="RR_roll">
+    <inertial>
+      <origin xyz="1.11022302462516E-16 0 -1.11022302462516E-16" rpy="0 0 0" />
+      <mass value="0.047294406860778" />
+      <inertia ixx="1.41883783502069E-05" ixy="2.51094514413731E-22" ixz="-1.58818677610181E-22"
+               iyy="9.50735464480302E-06" iyz="1.99325585425421E-21" izz="9.50735464480302E-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/RR_roll.STL" /></geometry>
+      <material name=""><color rgba="0.294117647058824 0.294117647058824 0.294117647058824 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/RR_roll.STL" /></geometry>
+    </collision>
+  </link>
+  <joint name="rr_roll" type="continuous">
+    <origin xyz="-0.0500000000000028 -0.000959824507811624 0.0229799638144559" rpy="3.14159265358978 -0.0417436225359922 1.57079632679489" />
+    <parent link="RR_swivel" />
+    <child link="RR_roll" />
+    <axis xyz="-1 0 0" />
+  </joint>
+
+<!--LEFT DRIVE WHEEL-->
+  <link name="LEFT_drive">
+    <inertial>
+      <origin xyz="-0.000435316178176041 1.43219237733194E-07 7.15469608836283E-07" rpy="0 0 0" />
+      <mass value="0.172871365054941" />
+      <inertia ixx="0.00041295850631102" ixy="-1.3967686359444E-10" ixz="-6.94216331541942E-10"
+               iyy="0.000264146108822355" iyz="9.47688308859436E-10" izz="0.00026415067034445" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/LEFT_drive.STL" /></geometry>
+      <material name=""><color rgba="0.298039215686275 0.298039215686275 0.298039215686275 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/LEFT_drive.STL" /></geometry>
+    </collision>
+  </link>
+  <joint name="left_drive" type="continuous">
+    <origin xyz="0 0.32099994000006 -0.0519998800001306" rpy="1.5707963267949 0 1.5707963267949" />
+    <parent link="CHASSIS" />
+    <child link="LEFT_drive" />
+    <axis xyz="1 0 0" />
+  </joint>
+
+<!--RIGHT DRIVE WHEEL-->
+  <link name="RIGHT_drive">
+    <inertial>
+      <origin xyz="-0.000435317384219203 3.49623845763425E-07 6.40158243581102E-07" rpy="0 0 0" />
+      <mass value="0.172871342384214" />
+      <inertia ixx="0.00041295850491582" ixy="-3.39976682291384E-10" ixz="-6.2085373672612E-10"
+               iyy="0.000264147048135927" iyz="2.0749818440274E-09" izz="0.000264149727744325" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/RIGHT_drive.STL" /></geometry>
+      <material name=""><color rgba="0.298039215686275 0.298039215686275 0.298039215686275 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/RIGHT_drive.STL" /></geometry>
+    </collision>
+  </link>
+  <joint name="right_drive" type="continuous">
+    <origin xyz="0 -0.320999940000059 -0.0519998800001246" rpy="1.5707963267949 0 -1.5707963267949" />
+    <parent link="CHASSIS" />
+    <child link="RIGHT_drive" />
+    <axis xyz="1 0 0" />
+  </joint>
+
+<!--LIDAR-->
+  <link name="LIDAR">
+    <inertial>
+      <origin xyz="0.0124301051678767 -0.00143154992810615 -0.000239815633560569" rpy="0 0 0" />
+      <mass value="0.11668205406855" />
+      <inertia ixx="4.69528158829323E-05" ixy="1.92108033402297E-05" ixz="-7.4737903940835E-07"
+               iyy="0.000112425267410857" iyz="4.15170038674818E-07" izz="0.000100209188218838" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/LIDAR.STL" /></geometry>
+      <material name=""><color rgba="0.149019607843137 0.149019607843137 0.149019607843137 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry><mesh filename="package://real_description/meshes/LIDAR.STL" /></geometry>
+    </collision>
+  </link>
+  <joint name="lidar" type="fixed">
+    <origin xyz="0.337928211604104 0.0011642377654919 0.220978892743802" rpy="1.5707963267949 0 3.14159265358979" />
+    <parent link="CHASSIS" />
+    <child link="LIDAR" />
+    <axis xyz="0 0 0" />
+  </joint>
+
+<!--IMU-->
+  <link name="imu_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><box size="0.03 0.03 0.01"/></geometry>
+      <material name="imu_blue"><color rgba="0.0 0.0 1.0 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><box size="0.03 0.03 0.01"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.01"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0"
+               iyy="0.000001" iyz="0" izz="0.000001"/>
+    </inertial>
+  </link>
+  <joint name="imu_joint" type="fixed">
+    <parent link="CHASSIS"/>
+    <child link="imu_link"/>
+    <origin xyz="0.0 0.0 0.05" rpy="0 0 0"/>
+  </joint>
+
+</robot>

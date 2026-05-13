@@ -3,9 +3,11 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
 
+
 def generate_launch_description():
     pkg_desc = get_package_share_directory('real_description')
-    urdf_path = os.path.join(pkg_desc, 'urdf', 'Wheeled_Base.urdf')
+    urdf_path = os.path.join(pkg_desc, 'urdf', 'Robot_Final.urdf')
+
     with open(urdf_path, 'r') as f:
         robot_description = f.read()
 
@@ -17,8 +19,6 @@ def generate_launch_description():
             output='screen',
             parameters=[{'robot_description': robot_description}],
         ),
-        # Replaces joint_state_publisher_gui
-        # Drives wheels from /cmd_vel for visualization
         Node(
             package='real_bringup',
             executable='diff_drive_sim_node',
