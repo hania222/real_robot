@@ -31,7 +31,8 @@
 //    some smaller stability protections:
 //            1. PID inetgral anti-windup
 //            2. derivative spike prevention
-//            3. safe startup  
+//            3. safe startup
+//            4. encoder sanity check —> skips any tick where encoder reports a physically impossible speed (caused byelectrical noise from motor PWM switching)
 //                  
 //
 
@@ -322,6 +323,15 @@ void odom_timer_callback(rcl_timer_t * timer, int64_t /*last_call*/) {
     // Actual wheel velocities derived from encoder ticks this period (m/s)
     float actual_v_left  = dl / dt;
     float actual_v_right = dr / dt;
+
+    //encoder sanity checkup, bc the PID would react to a fake 50 m/s error and send full PWM instantly, causing a violent jerk
+    if (fabsf(actual_v_left)  > MAX_PHYSICAL_SPEED ||
+        fabsf(actual_v_right) > MAX_PHYSICAL_SPEED) {
+        // Reset tick baseline so next tick compares correctly from here
+        last_left_ticks  = cur_left;
+        last_right_ticks = cur_right;
+        return;
+    }
 
     // PID motor drive
     float pwm_left  = 0.0f;

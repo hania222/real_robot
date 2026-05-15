@@ -67,9 +67,9 @@
 
 
 //  Stall detection
-#define STALL_PWM_THRESHOLD    200.0f
+#define STALL_PWM_THRESHOLD    220.0f
 #define STALL_SPEED_THRESHOLD    0.02f   // m/s — below this = "wheel stopped"
-#define STALL_TIME_MS           2000     // ms before motors are cut on stall
+#define STALL_TIME_MS           800     // ms before motors are cut on stall
 
 //  Slew rate limiter
 //  Start at 0.05,  (If gearbox jolts on start, lower to 0.03. If robot won't reach top speed, raise to 0.1/0.2)
@@ -85,4 +85,4 @@
 //  Minimum wheel speed for stall detection
 // match STALL_SPEED_THRESHOLD so both checks agree on "wheel stopped" 
 #define MIN_WHEEL_SPEED  0.02f  // m/s
-
+#define MAX_PHYSICAL_SPEED  1.4f   // m/s — above rated 1.2 m/s + margin
