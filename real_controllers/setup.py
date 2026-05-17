@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'hardware_bridge_node = real_controllers.hardware_bridge_node:main',
         ],
     },
 )

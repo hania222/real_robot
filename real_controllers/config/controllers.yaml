@@ -1,0 +1,29 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 50  # matches config.h CONTROL_LOOP_HZ
+
+    diff_drive_controller:
+      type: diff_drive_controller/DiffDriveController
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+diff_drive_controller:
+  ros__parameters:
+    left_wheel_names:  ['left_drive']
+    right_wheel_names: ['right_drive']
+
+    wheel_separation: 0.642      # matches your URDF / config.h WHEEL_BASE
+    wheel_radius:     0.065      # matches your config.h WHEEL_RADIUS
+
+    use_stamped_vel: false        
+    odom_frame_id:   odom
+    base_frame_id:   CHASSIS
+
+    publish_rate: 50.0
+
+    # Velocity limits matching  existing nav2_params.yaml
+    linear.x.max_velocity:   0.70
+    linear.x.min_velocity:  -0.70
+    angular.z.max_velocity:  1.5
+    angular.z.min_velocity: -1.5

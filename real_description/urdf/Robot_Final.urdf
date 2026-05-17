@@ -1,4 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+<ros2_control name="RealRobotHardware" type="system">
+  <hardware>
+    <!-- using a "fake" system here because the Python bridge handles real hardware externally via serial -->
+    <plugin>mock_components/GenericSystem</plugin>
+  </hardware>
+
+  <joint name="left_drive">
+    <command_interface name="velocity"/>
+    <state_interface name="velocity"/>
+    <state_interface name="position"/>
+  </joint>
+
+  <joint name="right_drive">
+    <command_interface name="velocity"/>
+    <state_interface name="velocity"/>
+    <state_interface name="position"/>
+  </joint>
+</ros2_control>
+
 <robot name="Robot_Final">
   <link name="CHASSIS">
     <inertial>
