@@ -1,25 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-
-<ros2_control name="RealRobotHardware" type="system">
-  <hardware>
-    <!-- using a "fake" system here because the Python bridge handles real hardware externally via serial -->
-    <plugin>mock_components/GenericSystem</plugin>
-  </hardware>
-
-  <joint name="left_drive">
-    <command_interface name="velocity"/>
-    <state_interface name="velocity"/>
-    <state_interface name="position"/>
-  </joint>
-
-  <joint name="right_drive">
-    <command_interface name="velocity"/>
-    <state_interface name="velocity"/>
-    <state_interface name="position"/>
-  </joint>
-</ros2_control>
-
 <robot name="Robot_Final">
+
   <link name="CHASSIS">
     <inertial>
       <origin xyz="0.148972616629833 8.59131719513906E-05 0.037381334125696" rpy="0 0 0" />
@@ -37,6 +18,7 @@
       <geometry><mesh filename="package://real_description/meshes/CHASSIS.STL" /></geometry>
     </collision>
   </link>
+  
  <!--FRONT LEFT CASTER-->
   <link name="FL_swivel">
     <inertial>
