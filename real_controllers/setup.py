@@ -25,6 +25,8 @@ setup(
     entry_points={
         'console_scripts': [
             'hardware_bridge_node = real_controllers.hardware_bridge_node:main',
+            'carriage_bridge_node= real_controllers.carriage_bridge_node:main',
+            'lift_bridge_node = real_controllers.lift_bridge_node:main',
         ],
     },
 )

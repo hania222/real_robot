@@ -77,8 +77,10 @@ void setLeftMotor(float signed_pwm) {
         return;
     }
     int pwm_magnitude = (int)constrain(fabsf(signed_pwm), 0, 255);
-    if (signed_pwm >= 0.0f) { analogWrite(L_RPWM, pwm_magnitude); analogWrite(L_LPWM, 0); } // Forward
-    else                    { analogWrite(L_RPWM, 0); analogWrite(L_LPWM, pwm_magnitude); } // Reverse
+    if (signed_pwm >= 0.0f) { 
+        analogWrite(L_RPWM, pwm_magnitude); analogWrite(L_LPWM, 0); } // Forward
+    else { 
+        analogWrite(L_RPWM, 0); analogWrite(L_LPWM, pwm_magnitude); } // Reverse
 }
 
 void setRightMotor(float signed_pwm) {
@@ -110,11 +112,10 @@ float pidStep(float target_velocity_ms, float actual_velocity_ms,
 
 // Slew-rate limiter
 float slewToward(float current_velocity, float desired_velocity, float max_step_per_tick) {
-    return current_velocity + constrain(desired_velocity - current_velocity,
-                                        -max_step_per_tick, max_step_per_tick);
+    return current_velocity + constrain(desired_velocity - current_velocity, -max_step_per_tick, max_step_per_tick);
 }
 
-//  Serial command parser 
+//  Serial command parser (read JSON Commands from ros2)
 void parseSerialCommand() {
     if (!Serial.available()) return;
 
@@ -172,8 +173,7 @@ void checkStall(unsigned long current_time_ms) {
 void sendFeedback() {
     int16_t raw_accel_x, raw_accel_y, raw_accel_z;
     int16_t raw_gyro_x,  raw_gyro_y,  raw_gyro_z;
-    mpu.getMotion6(&raw_accel_x, &raw_accel_y, &raw_accel_z,
-                   &raw_gyro_x,  &raw_gyro_y,  &raw_gyro_z);
+    mpu.getMotion6(&raw_accel_x, &raw_accel_y, &raw_accel_z, &raw_gyro_x,  &raw_gyro_y,  &raw_gyro_z);
 
     float accel_x_ms2 = raw_accel_x / 16384.0f * 9.81f;
     float accel_y_ms2 = raw_accel_y / 16384.0f * 9.81f;
@@ -234,7 +234,7 @@ void setup() {
         Serial.println("{\"warn\":\"MPU6050 not found\"}");
     }
 
-    last_pid_time_us      = micros();
+    last_pid_time_us      = micros();   //time now in microseconds
     last_feedback_time_us = micros();
     last_command_time_ms  = millis();
 
@@ -256,7 +256,7 @@ void loop() {
     
     // PID control loop  at PID_Hz
     if ((current_time_us - last_pid_time_us) >= PID_PERIOD_US) {
-        float delta_time_sec = (current_time_us - last_pid_time_us) * 1e-6f;
+        float delta_time_sec = (current_time_us - last_pid_time_us) * 1e-6f;  //to convert to microseconds to seconds
         last_pid_time_us     = current_time_us;
 
         noInterrupts();
@@ -270,6 +270,11 @@ void loop() {
         // actual velocity
         left_wheel_velocity_ms  = (left_tick_count  * metres_per_encoder_tick) / delta_time_sec;
         right_wheel_velocity_ms = (right_tick_count * metres_per_encoder_tick) / delta_time_sec;
+
+        // spike filter — discard corrupted encoder reads before they reach the PID
+        if (fabsf(left_wheel_velocity_ms)  > MAX_BELIEVABLE_SPEED) left_wheel_velocity_ms  = 0.0f;
+        if (fabsf(right_wheel_velocity_ms) > MAX_BELIEVABLE_SPEED) right_wheel_velocity_ms = 0.0f;
+
         //actual position (integrate velocity)
         left_wheel_position_metres  += left_tick_count  * metres_per_encoder_tick;
         right_wheel_position_metres += right_tick_count * metres_per_encoder_tick;

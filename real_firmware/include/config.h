@@ -3,9 +3,9 @@
 // Robot geometry
 #define WHEEL_RADIUS      0.065f        // 130 mm diameter → 65 mm radius
 #define WHEEL_BASE        0.642f        // metres — must match URDF joint origins
-#define GEAR_RATIO        30.0f
+#define GEAR_RATIO        99.f
 #define ENCODER_PPR       600.0f        // pulses per motor shaft revolution
-#define COUNTS_PER_REV    (ENCODER_PPR * 4.0f * GEAR_RATIO)  // 600 × 4 × 30 = 72 000
+#define COUNTS_PER_REV    (ENCODER_PPR * 4.0f * GEAR_RATIO)  // 600 × 4 × 99.5 = 238 800
 
 // BTS7960 motor driver pins
 // RPWM = forward PWM, LPWM = reverse PWM, R_EN + L_EN = enable (must be HIGH)
@@ -55,7 +55,7 @@
 // Slew-rate limiter — limits how fast the target velocity can change per PID tick
 // Lower → smoother start, slower response
 // Higher → faster response, more current spike on startup
-#define MAX_ACCEL_PER_TICK  0.05f   // m/s per tick (= 1.0 m/s² at 50 Hz)
+#define MAX_ACCEL_PER_TICK  0.01f   // m/s per tick (= 0.5 m/s² at 50 Hz)
 
 // PWM dead-band — PWM values below this are forced to zero
 // Raise to 20 if wheels twitch at zero command
@@ -65,3 +65,6 @@
 // Minimum wheel speed on the command side
 // Must match STALL_SPEED_THRESHOLD so both checks agree on "wheel stopped"
 #define MIN_WHEEL_SPEED  0.02f   // m/s
+// Encoder spike filter — discard reads above this speed as corrupted (max motor speed= 60RPM= 0.408 m/s)
+// impossible value so genuine noise spikes are caught before reaching the PID
+#define MAX_BELIEVABLE_SPEED  0.6f   // m/s

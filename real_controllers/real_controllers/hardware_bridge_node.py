@@ -13,8 +13,8 @@ from std_msgs.msg import Float64MultiArray, String
 from tf2_ros import TransformBroadcaster
 import serial
 
-WHEEL_RADIUS = 0.065   # 
-WHEEL_BASE   = 0.642   # 
+WHEEL_RADIUS = 0.065   
+WHEEL_BASE   = 0.642    
 
 
 class HardwareBridgeNode(Node):
@@ -31,8 +31,8 @@ class HardwareBridgeNode(Node):
         self.get_logger().info(f'Serial open: {port} @ {baud_rate} baud')
 
         # publishers
-        self.joint_states_pub = self.create_publisher(JointState,        '/joint_states', 10)
-        self.imu_pub          = self.create_publisher(Imu,               '/imu/data',     10)
+        self.joint_states_pub = self.create_publisher(JointState,'/joint_states', 10)
+        self.imu_pub          = self.create_publisher(Imu, '/imu/data',10)
         self.pid_debug_pub    = self.create_publisher(Float64MultiArray,  '/pid_debug',   10)
         self.odom_pub         = self.create_publisher(Odometry,          '/odom',         10)
 
@@ -67,7 +67,7 @@ class HardwareBridgeNode(Node):
 
     def _on_pid_gains(self, msg: String):
         try:
-            # convert the incoming string JSON string message to a dict
+        # convert the incoming string JSON string message to a dict
             raw = json.loads(msg.data)
         except json.JSONDecodeError as e:
             self.get_logger().warn(f'/pid_gains bad JSON: {e}')

@@ -5,8 +5,8 @@ from rclpy.node import Node
 from geometry_msgs.msg import Twist
 
 # Test parameters
-LINEAR_SPEED_MS   = 0.3    # m/s   — forward speed during the ON phase
-ANGULAR_SPEED_RS  = 0.5    # rad/s — yaw rate  during the ON phase
+LINEAR_SPEED_MS   = 0.2    # m/s   — forward speed during the ON phase
+ANGULAR_SPEED_RS  = 0.3    # rad/s — yaw rate  during the ON phase
 STEP_ON_DURATION  = 3.0    # seconds the command is active (ON)
 CYCLE_PERIOD      = 6.0    # total cycle: 3 s ON then 3 s OFF
 PUBLISH_PERIOD    = 0.05   # timer period → 20 Hz publish rate
