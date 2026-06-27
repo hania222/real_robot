@@ -14,7 +14,7 @@ ESP32 is 3.3V logic — add a 1kΩ resistor in series on each signal line (PUL, 
 | ESP32 GPIO 23 | 1kΩ resistor → TB6600 Ext2 DIR− | Same GPIO wired to both |
 | ESP32 GPIO 25 | 1kΩ resistor → TB6600 Ext1 ENA− | Extension driver 1 enable |
 | ESP32 GPIO 26 | 1kΩ resistor → TB6600 Ext2 ENA− | Extension driver 2 enable |
-| ESP32 3.3V | TB6600 Rot PUL+ | Positive side of optocoupler |
+| ESP32 3.3V | TB6600 Rot PUL+ |  |
 | ESP32 3.3V | TB6600 Rot DIR+ | |
 | ESP32 3.3V | TB6600 Rot ENA+ | |
 | ESP32 3.3V | TB6600 Ext1 PUL+ | |
@@ -23,12 +23,12 @@ ESP32 is 3.3V logic — add a 1kΩ resistor in series on each signal line (PUL, 
 | ESP32 3.3V | TB6600 Ext2 PUL+ | |
 | ESP32 3.3V | TB6600 Ext2 DIR+ | |
 | ESP32 3.3V | TB6600 Ext2 ENA+ | |
-| ESP32 GND | TB6600 Rot GND (signal) | Common ground — mandatory |
+| ESP32 GND | TB6600 Rot GND (signal) |  |
 | ESP32 GND | TB6600 Ext1 GND (signal) | |
 | ESP32 GND | TB6600 Ext2 GND (signal) | |
-| ESP32 GPIO 32 | Arm home switch leg A | INPUT_PULLUP, LOW = triggered |
-| ESP32 GPIO 13 | Arm end switch leg A | INPUT_PULLUP, LOW = triggered (not GPIO 35 — input-only, no pull-up) |
-| ESP32 GPIO 33 | Rotation home switch leg A | INPUT_PULLUP, LOW = triggered |
+| ESP32 GPIO 32 | Arm home switch leg A | LOW = triggered |
+| ESP32 GPIO 13 | Arm end switch leg A | |
+| ESP32 GPIO 33 | Rotation home switch leg A | LOW = triggered |
 | ESP32 GND | All switch leg B | |
 | ESP32 GPIO 27 | Servo left signal | SG90 signal wire |
 | ESP32 GPIO 14 | Servo right signal | SG90 signal wire |
@@ -62,7 +62,7 @@ Firmware: `enable_driver()` writes LOW, `disable_driver()` writes HIGH.
 
 ## Active-HIGH wiring (positive pins → ESP32 GPIOs, negative pins → GND)
 Simpler for 3.3V ESP32 — no resistors needed because GND reference is solid.
-The optocoupler sees the full 3.3V swing directly.
+The optocoupler sees the full 3.3V swing directly
 
 | From | To | Note |
 |---|---|---|
@@ -75,7 +75,7 @@ The optocoupler sees the full 3.3V swing directly.
 | ESP32 GPIO 23 | TB6600 Ext2 DIR+ | Same GPIO wired to both |
 | ESP32 GPIO 25 | TB6600 Ext1 ENA+ | Extension driver 1 enable |
 | ESP32 GPIO 26 | TB6600 Ext2 ENA+ | Extension driver 2 enable |
-| ESP32 GND | TB6600 Rot PUL− | Negative side of optocoupler tied to GND |
+| ESP32 GND | TB6600 Rot PUL− | -ve side of optocoupler tied to GND |
 | ESP32 GND | TB6600 Rot DIR− | |
 | ESP32 GND | TB6600 Rot ENA− | |
 | ESP32 GND | TB6600 Ext1 PUL− | |
@@ -84,16 +84,16 @@ The optocoupler sees the full 3.3V swing directly.
 | ESP32 GND | TB6600 Ext2 PUL− | |
 | ESP32 GND | TB6600 Ext2 DIR− | |
 | ESP32 GND | TB6600 Ext2 ENA− | |
-| ESP32 GND | TB6600 Rot GND (signal) | Common ground — mandatory |
+| ESP32 GND | TB6600 Rot GND (signal) | Common ground |
 | ESP32 GND | TB6600 Ext1 GND (signal) | |
 | ESP32 GND | TB6600 Ext2 GND (signal) | |
 | ESP32 GPIO 32 | Arm home switch leg A | INPUT_PULLUP, LOW = triggered |
-| ESP32 GPIO 13 | Arm end switch leg A | INPUT_PULLUP, LOW = triggered (not GPIO 35) |
+| ESP32 GPIO 13 | Arm end switch leg A | INPUT_PULLUP, LOW = triggered  |
 | ESP32 GPIO 33 | Rotation home switch leg A | INPUT_PULLUP, LOW = triggered |
 | ESP32 GND | All switch leg B | |
 | ESP32 GPIO 27 | Servo left signal | SG90 signal wire |
 | ESP32 GPIO 14 | Servo right signal | SG90 signal wire |
-| External 5V rail | Both SG90 red wire (VCC) | Do NOT power servos from ESP32 5V pin |
+| External 5V rail | Both SG90 red wire (VCC) |  |
 | External 5V GND | Both SG90 brown wire (GND) | |
 | External 5V GND | ESP32 GND | Common ground between servo rail and ESP32 |
 | 24V PSU positive | TB6600 Rot VCC | Motor power |
@@ -102,7 +102,7 @@ The optocoupler sees the full 3.3V swing directly.
 | 24V PSU negative | TB6600 Rot GND (power) | |
 | 24V PSU negative | TB6600 Ext1 GND (power) | |
 | 24V PSU negative | TB6600 Ext2 GND (power) | |
-| 24V PSU negative | ESP32 GND | Star ground — tie all GNDs together |
+| 24V PSU negative | ESP32 GND | all GNDs together |
 | TB6600 Rot A+ | Rotation NEMA23 coil A+ | |
 | TB6600 Rot A− | Rotation NEMA23 coil A− | |
 | TB6600 Rot B+ | Rotation NEMA23 coil B+ | |

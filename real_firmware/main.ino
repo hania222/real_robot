@@ -71,7 +71,8 @@ unsigned long last_command_time_ms  = 0;
 
 //BTS7960 motor driver control functions
 void setLeftMotor(float signed_pwm) {
-    if (fabsf(signed_pwm) < PWM_DEADBAND) {
+    if (fabsf(signed_pwm) < PWM_DEADBAND) 
+    {
         analogWrite(L_RPWM, 0);
         analogWrite(L_LPWM, 0);
         return;
