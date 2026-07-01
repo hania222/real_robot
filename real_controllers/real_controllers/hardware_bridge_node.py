@@ -1,254 +1,108 @@
-#!/usr/bin/env python3
-import json
-import math
-import time
-import threading
-
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist, TransformStamped
-from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Imu, JointState
-from std_msgs.msg import Float64MultiArray, String
-from tf2_ros import TransformBroadcaster
-import serial
+from geometry_msgs.msg import Twist   # changed from TwistStamped — hardware_bridge_node.py subscribes to plain Twist on /cmd_vel
+import asyncio     #asyncio is needed for websockets, but we will run it in a separate thread
+import websockets  #library to create a websocket server
+import json
+import threading
 
-WHEEL_RADIUS = 0.065   
-WHEEL_BASE   = 0.642    
+# MAX: 70% of rated max speed (1.2 m/s)
+# MIN: kept as a joystick deadzone threshold — below this the stick input is too small to be a meaningful command
+MAX_LINEAR  = 0.84   # m/s
+MIN_LINEAR  = 0.10   # m/s
+MAX_ANGULAR = 1.5    # rad/s
+MIN_ANGULAR = 0.1    # rad/s
 
-
-class HardwareBridgeNode(Node):
-
+class JoystickWebSocketNode(Node):
     def __init__(self):
-        super().__init__('hardware_bridge_node')
+        super().__init__('joystick_ws_node')
+        self.publisher = self.create_publisher(Twist, '/cmd_vel', 10)   # changed topic + msg type to match hardware_bridge_node.py
+        self.timer = self.create_timer(0.05, self.publish_cmd)  # 20Hz
+        #stores current velocity
+        self.linear_x = 0.0
+        self.angular_z = 0.0
+        #decay factor to smoothly reduce velocity when no new commands are received not suddenly stop the robot
+        self.decay = 0.65
 
-        self.declare_parameter('serial_port', '/dev/esp32')
-        self.declare_parameter('baud_rate',   115200)
-        port      = self.get_parameter('serial_port').value
-        baud_rate = self.get_parameter('baud_rate').value
+    def clamp_velocity(self, value, max_val, min_val):
 
-        self.serial_conn = serial.Serial(port, baud_rate, timeout=0.1)
-        self.get_logger().info(f'Serial open: {port} @ {baud_rate} baud')
+        """
+        clamping: if the value is above max_val, it will be set to max_val and if
+        it is below -max_val, it will be set to -max_val,
+        if it is between -min_val and min_val, it will be set to 0.0, otherwise it will be unchanged
+        Example with MAX_LINEAR=0.84, MIN_LINEAR=0.10:
+          0.70  → 0.84   (clamped to max)
+          0.30  → 0.30   (unchanged, in valid range)
+          0.05  → 0.00   (below min, zeroed)
+         -0.30  → -0.30  (unchanged)
+         -0.80  → -0.84  (clamped to -max)
+        """
+        if abs(value) < min_val:
+            return 0.0
+        return max(-max_val, min(max_val, value))
 
-        # publishers
-        self.joint_states_pub = self.create_publisher(JointState,'/joint_states', 10)
-        self.imu_pub          = self.create_publisher(Imu, '/imu/data',10)
-        self.pid_debug_pub    = self.create_publisher(Float64MultiArray,  '/pid_debug',   10)
-        self.odom_pub         = self.create_publisher(Odometry,          '/odom',         10)
+    def publish_cmd(self):
+        msg = Twist()   # changed from TwistStamped — no header needed for plain Twist
 
-        # broadcasts the odom → CHASSIS transform so the TF tree stays connected
-        self.tf_broadcaster = TransformBroadcaster(self)
+        # clamp before publishing — hard safety limit so the robot never receives
+        # a command outside the safe operating range regardless of joystick input
+        msg.linear.x  = self.clamp_velocity(self.linear_x,  MAX_LINEAR,  MIN_LINEAR)
+        msg.angular.z = self.clamp_velocity(self.angular_z, MAX_ANGULAR, MIN_ANGULAR)
 
-        # subscribers
-        self.create_subscription(Twist,  '/cmd_vel',   self._on_cmd_vel,   10)
-        self.create_subscription(String, '/pid_gains', self._on_pid_gains, 10)
+        self.linear_x  *= self.decay
+        self.angular_z *= self.decay
+        #prevents tiny movements to prvent robot from shaking when joystick is released, if the velocity is very small we set it to zero
+        if abs(self.linear_x) < 0.01:
+            self.linear_x = 0.0
+        if abs(self.angular_z) < 0.01:
+            self.angular_z = 0.0
+        self.publisher.publish(msg)
 
-        # odometry state — updated every feedback packet
-        self._pos_x           = 0.0
-        self._pos_y           = 0.0
-        self._heading         = 0.0   # yaw (radians)
-        self._last_odom_time  = time.monotonic()  # storing last time we received an odometry packet to compute dt for dead-reckoning
+    #update velocity from websocket data, this will be called from the websocket handler when a new message is received,
+    #  we need to convert the values to float because they might come as strings from the websocket
+    def update_velocity(self, linear, angular):
+        # clamp on receive too so stored values are always within safe range, this way even if the websocket client sends out-of-range values, our node will never use them
+        self.linear_x  = self.clamp_velocity(float(linear),  MAX_LINEAR,  MIN_LINEAR)
+        self.angular_z = self.clamp_velocity(float(angular), MAX_ANGULAR, MIN_ANGULAR)
 
-        # serial reader thread and shutdown flag (to cleanly stop the thread on node shutdown)
-        self._shutdown_requested = False
+node = None
 
-        # start the serial reader loop in a separate thread so it doesn't block the ROS callbacks
-        threading.Thread(target=self._serial_reader_loop, daemon=True).start()
-
-    # Outgoing: ROS -> ESP32
-    def _on_cmd_vel(self, msg: Twist):
-        linear  = msg.linear.x
-        angular = msg.angular.z
-        # send both wheel targets in ONE serial message so the ESP32 applies them
-        self._send({
-            'left_target':  round(linear - angular * WHEEL_BASE / 2.0, 4),
-            'right_target': round(linear + angular * WHEEL_BASE / 2.0, 4),
-        })
-
-    def _on_pid_gains(self, msg: String):
+#websocket handler to receive joystick commands,will run in a separate thread and will listen for incoming websocket messages,
+# when a message is received it will parse the JSON data and update the velocity of the robot using the node instance
+async def handler(websocket):
+    async for message in websocket:
         try:
-        # convert the incoming string JSON string message to a dict
-            raw = json.loads(msg.data)
-        except json.JSONDecodeError as e:
-            self.get_logger().warn(f'/pid_gains bad JSON: {e}')
-            return
-
-        # extract PID gains from the raw data and put them the gain dict, supporting both unified keys (kp/ki/kd) and separate left/right keys (kp_l/ki_l/kd_l and kp_r/ki_r/kd_r)
-        gains = {}
-        for name in ('kp', 'ki', 'kd'):
-            value = raw.get(name) or raw.get(f'{name}_l') or raw.get(f'{name}_r')
-            if value is not None:
-                gains[name] = round(float(value), 4)
-
-        if gains:
-            self._send(gains)
-            self.get_logger().info(f'PID gains sent: {gains}')
-        else:
-            self.get_logger().warn('/pid_gains: no kp/ki/kd keys found')
-
-    def _send(self, data: dict):
-        try:
-            self.serial_conn.write((json.dumps(data) + '\n').encode())
+            data = json.loads(message)
+            node.update_velocity(
+                data.get("linear",  0.0),
+                data.get("angular", 0.0)
+            )
         except Exception as e:
-            self.get_logger().warn(f'Serial write error: {e}')
+            print(f"[WS Error] {e}")
 
-    # Incomings: ESP32 -> ROS
-    # Reads lines of JSON from the serial port, parses them, and publishes to the appropriate ROS topics
-    def _serial_reader_loop(self):
-        while not self._shutdown_requested:
-            try:
-                line = self.serial_conn.readline().decode('utf-8', errors='ignore').strip()
-                if not line.startswith('{'):
-                    continue
-                data = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            except Exception as e:
-                self.get_logger().warn(f'Serial read error: {e}')
-                continue
+async def websocket_server():
+    #  create server inside async function, not with asyncio.run()
+    async with websockets.serve(handler, "0.0.0.0", 8765): #0.0.0.0 means any device can connect to this program(on same network), 8765 is the port number
+        await asyncio.Future()  # run forever
 
-            if 'info' in data or 'warn' in data:
-                key = 'info' if 'info' in data else 'warn'
-                self.get_logger().info(f'ESP32: {data[key]}')
-                continue
+def run_websocket_server():
+    #  create a New event loop explicitly for this thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(websocket_server())
 
-            now = self.get_clock().now().to_msg()
-            self._publish_joint_states(data, now)
-            self._publish_imu(data, now)
-            self._publish_pid_debug(data)
-            self._publish_odom(data, now)
-
-    # extract joint states from the coming data dict & publish a joint state msg with the left and right wheel positions (in radians) and velocities (in radians/s),
-    # converting from the raw position/velocity values (in metres and metres/s) using the wheel radius.
-    def _publish_joint_states(self, data: dict, timestamp):
-        msg              = JointState()
-        msg.header.stamp = timestamp
-        msg.name         = ['left_drive', 'right_drive']
-        msg.position     = [data.get('left_position',  0.0) / WHEEL_RADIUS,  # rad
-                            data.get('right_position', 0.0) / WHEEL_RADIUS]
-        msg.velocity     = [data.get('left_velocity',  0.0) / WHEEL_RADIUS,  # rad/s
-                            data.get('right_velocity', 0.0) / WHEEL_RADIUS]
-        msg.effort       = []
-        self.joint_states_pub.publish(msg)
-
-    def _publish_imu(self, data: dict, timestamp):
-        msg                           = Imu()
-        msg.header.stamp              = timestamp
-        msg.header.frame_id           = 'imu_link'
-        msg.linear_acceleration.x     = data.get('accel_x', 0.0)
-        msg.linear_acceleration.y     = data.get('accel_y', 0.0)
-        msg.linear_acceleration.z     = data.get('accel_z', 0.0)
-        msg.angular_velocity.x        = data.get('gyro_x',  0.0)
-        msg.angular_velocity.y        = data.get('gyro_y',  0.0)
-        msg.angular_velocity.z        = data.get('gyro_z',  0.0)
-        msg.orientation_covariance[0] = -1.0   # MPU-6050 gives no orientation
-        self.imu_pub.publish(msg)
-
-    def _publish_pid_debug(self, data: dict):
-        r        = WHEEL_RADIUS
-        msg      = Float64MultiArray()
-        msg.data = [
-            data.get('left_target',    0.0) / r,   # [0] left  target  (rad/s)
-            data.get('left_velocity',  0.0) / r,   # [1] left  actual  (rad/s)
-            data.get('left_error',     0.0) / r,   # [2] left  error   (rad/s)
-            data.get('left_pwm',       0.0),        # [3] left  PWM
-            data.get('right_target',   0.0) / r,   # [4] right target  (rad/s)
-            data.get('right_velocity', 0.0) / r,   # [5] right actual  (rad/s)
-            data.get('right_error',    0.0) / r,   # [6] right error   (rad/s)
-            data.get('right_pwm',      0.0),        # [7] right PWM
-        ]
-        self.pid_debug_pub.publish(msg)
-
-    def _publish_odom(self, data: dict, timestamp):
-        # time delta
-        now_mono = time.monotonic()
-        dt       = now_mono - self._last_odom_time
-        self._last_odom_time = now_mono
-
-        # skip bad dt (first packet or stall > 1 s)
-        if dt <= 0.0 or dt > 1.0:
-            return
-
-        # differential drive dead-reckoning
-        # robot forward velocity and yaw rate from left/right wheel speeds
-        left_vel  = data.get('left_velocity',  0.0)   # m/s
-        right_vel = data.get('right_velocity', 0.0)   # m/s
-
-        linear_vel  = (left_vel + right_vel) / 2.0          # m/s forward
-        angular_vel = (right_vel - left_vel) / WHEEL_BASE   # rad/s yaw
-
-        # integrate heading first, then position
-        self._heading += angular_vel * dt
-
-        # keep heading in [-π, π] to prevent floating-point drift
-        self._heading  = math.atan2(math.sin(self._heading), math.cos(self._heading))
-
-        self._pos_x += linear_vel * math.cos(self._heading) * dt  # cosine is the x component of the forward velocity
-        self._pos_y += linear_vel * math.sin(self._heading) * dt
-
-        # yaw angle -> quaternion (z-rotation only, 2D robot)
-        qz = math.sin(self._heading / 2.0)
-        qw = math.cos(self._heading / 2.0)
-
-        # publish /odom
-        odom                         = Odometry()
-        odom.header.stamp            = timestamp
-        odom.header.frame_id         = 'odom'
-        odom.child_frame_id          = 'CHASSIS'
-
-        odom.pose.pose.position.x    = self._pos_x
-        odom.pose.pose.position.y    = self._pos_y
-        odom.pose.pose.orientation.x = 0.0
-        odom.pose.pose.orientation.y = 0.0
-        odom.pose.pose.orientation.z = qz
-        odom.pose.pose.orientation.w = qw
-
-        odom.twist.twist.linear.x    = linear_vel
-        odom.twist.twist.angular.z   = angular_vel
-
-        # simple diagonal covariance assumptions
-        odom.pose.covariance[0]      = 0.001   # x variance
-        odom.pose.covariance[7]      = 0.001   # y variance
-        odom.pose.covariance[35]     = 0.05    # yaw variance
-        odom.twist.covariance[0]     = 0.001   # vx variance
-        odom.twist.covariance[35]    = 0.05    # vyaw variance
-
-        self.odom_pub.publish(odom)
-
-        # broadcast odom → CHASSIS TF
-        # needed so robot_state_publisher can complete the full TF tree
-        tf_msg                         = TransformStamped()
-        tf_msg.header.stamp            = timestamp
-        tf_msg.header.frame_id         = 'odom'
-        tf_msg.child_frame_id          = 'CHASSIS'
-        tf_msg.transform.translation.x = self._pos_x
-        tf_msg.transform.translation.y = self._pos_y
-        tf_msg.transform.translation.z = 0.0
-        tf_msg.transform.rotation.x    = 0.0
-        tf_msg.transform.rotation.y    = 0.0
-        tf_msg.transform.rotation.z    = qz
-        tf_msg.transform.rotation.w    = qw
-        self.tf_broadcaster.sendTransform(tf_msg)
-
-    # Cleanup serial connection on shutdown
-    def destroy_node(self):
-        self._shutdown_requested = True
-        if self.serial_conn.is_open:
-            self.serial_conn.close()
-        super().destroy_node()
-
-
-def main(args=None):
-    rclpy.init(args=args)
-    node = HardwareBridgeNode()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
-
+def main():
+    global node
+    rclpy.init()
+    node = JoystickWebSocketNode()
+    #run the websocket server in a parallel thread so it doesn't block the ROS node, we set daemon=True so that the thread will automatically close when the main program exits
+    ws_thread = threading.Thread(target=run_websocket_server, daemon=True)
+    ws_thread.start()
+    node.get_logger().info("Joystick WebSocket Node started on ws://0.0.0.0:8765")
+    node.get_logger().info(f"Velocity limits: linear={MIN_LINEAR}–{MAX_LINEAR} m/s  "
+                           f"angular={MIN_ANGULAR}–{MAX_ANGULAR} rad/s")
+    rclpy.spin(node)
+    rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

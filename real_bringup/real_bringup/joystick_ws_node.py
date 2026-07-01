@@ -1,13 +1,13 @@
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import TwistStamped  #  ESP32 firmware subscribes to TwistStamped on /cmd_vel_stamped
+from geometry_msgs.msg import Twist   # changed from TwistStamped — hardware_bridge_node.py subscribes to plain Twist on /cmd_vel
 import asyncio     #asyncio is needed for websockets, but we will run it in a separate thread
 import websockets  #library to create a websocket server
 import json
 import threading
 
-# MAX: 70% of rated max speed (1.2 m/s) 
-# MIN: below this the encoders produce too few ticks per 50ms period (20Hz)
+# MAX: 70% of rated max speed (1.2 m/s)
+# MIN: kept as a joystick deadzone threshold — below this the stick input is too small to be a meaningful command
 MAX_LINEAR  = 0.84   # m/s
 MIN_LINEAR  = 0.10   # m/s
 MAX_ANGULAR = 1.5    # rad/s
@@ -16,7 +16,7 @@ MIN_ANGULAR = 0.1    # rad/s
 class JoystickWebSocketNode(Node):
     def __init__(self):
         super().__init__('joystick_ws_node')
-        self.publisher = self.create_publisher(TwistStamped, '/cmd_vel_stamped', 10)  
+        self.publisher = self.create_publisher(Twist, '/cmd_vel', 10)   # changed topic + msg type to match hardware_bridge_node.py
         self.timer = self.create_timer(0.05, self.publish_cmd)  # 20Hz
         #stores current velocity
         self.linear_x = 0.0
@@ -28,12 +28,12 @@ class JoystickWebSocketNode(Node):
 
         """
         clamping: if the value is above max_val, it will be set to max_val and if
-        it is below -max_val, it will be set to -max_val, 
+        it is below -max_val, it will be set to -max_val,
         if it is between -min_val and min_val, it will be set to 0.0, otherwise it will be unchanged
         Example with MAX_LINEAR=0.84, MIN_LINEAR=0.10:
           0.70  → 0.84   (clamped to max)
           0.30  → 0.30   (unchanged, in valid range)
-          0.05  → 0.00   (below min, zeroed — encoder too noisy here)
+          0.05  → 0.00   (below min, zeroed)
          -0.30  → -0.30  (unchanged)
          -0.80  → -0.84  (clamped to -max)
         """
@@ -42,14 +42,12 @@ class JoystickWebSocketNode(Node):
         return max(-max_val, min(max_val, value))
 
     def publish_cmd(self):
-        msg = TwistStamped()                            
-        msg.header.stamp    = self.get_clock().now().to_msg()  # TwistStamped needs a header timestamp
-        msg.header.frame_id = 'CHASSIS'
+        msg = Twist()   # changed from TwistStamped — no header needed for plain Twist
 
         # clamp before publishing — hard safety limit so the robot never receives
         # a command outside the safe operating range regardless of joystick input
-        msg.twist.linear.x  = self.clamp_velocity(self.linear_x,  MAX_LINEAR,  MIN_LINEAR)
-        msg.twist.angular.z = self.clamp_velocity(self.angular_z, MAX_ANGULAR, MIN_ANGULAR)
+        msg.linear.x  = self.clamp_velocity(self.linear_x,  MAX_LINEAR,  MIN_LINEAR)
+        msg.angular.z = self.clamp_velocity(self.angular_z, MAX_ANGULAR, MIN_ANGULAR)
 
         self.linear_x  *= self.decay
         self.angular_z *= self.decay
@@ -67,9 +65,9 @@ class JoystickWebSocketNode(Node):
         self.linear_x  = self.clamp_velocity(float(linear),  MAX_LINEAR,  MIN_LINEAR)
         self.angular_z = self.clamp_velocity(float(angular), MAX_ANGULAR, MIN_ANGULAR)
 
-node = None 
+node = None
 
-#websocket handler to receive joystick commands,will run in a separate thread and will listen for incoming websocket messages, 
+#websocket handler to receive joystick commands,will run in a separate thread and will listen for incoming websocket messages,
 # when a message is received it will parse the JSON data and update the velocity of the robot using the node instance
 async def handler(websocket):
     async for message in websocket:
