@@ -7,7 +7,7 @@ import json
 import threading
 
 # Defaults — override via ROS2 params if needed
-SERIAL_PORT = '/dev/ttyUSB0'   # ttyACM0 is common for Mega, ttyUSB0 for ESP32/CP2102 boards — check with `ls /dev/tty*`
+SERIAL_PORT = '/dev/esp32'   # ttyACM0 is common for Mega, ttyUSB0 for ESP32/CP2102 boards — check with `ls /dev/tty*`
 BAUD_RATE   = 115200
 WHEEL_BASE  = 0.642  # metres — must match config.h WHEEL_BASE exactly
 
@@ -53,6 +53,8 @@ class HardwareBridgeNode(Node):
         # Differential drive kinematics: split body velocity into per-wheel targets
         left_target = v - (w * self.wheel_base / 2.0)
         right_target = v + (w * self.wheel_base / 2.0)
+        command = {"left_target": round(left_target, 4), "right_target": round(right_target, 4)}
+        self.get_logger().info(f'Sending: {command}')  
 
         command = {
             "left_target": round(left_target, 4),

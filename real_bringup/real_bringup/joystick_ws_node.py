@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist   # changed from TwistStamped — hardware_bridge_node.py subscribes to plain Twist on /cmd_vel
+from geometry_msgs.msg import Twist   # plain Twist on /cmd_vel, matches hardware_bridge_node.py
 import asyncio     #asyncio is needed for websockets, but we will run it in a separate thread
 import websockets  #library to create a websocket server
 import json
@@ -8,21 +8,31 @@ import threading
 
 # MAX: 70% of rated max speed (1.2 m/s)
 # MIN: kept as a joystick deadzone threshold — below this the stick input is too small to be a meaningful command
-MAX_LINEAR  = 0.84   # m/s
+MAX_LINEAR  = 0.313  # m/s
 MIN_LINEAR  = 0.10   # m/s
-MAX_ANGULAR = 1.5    # rad/s
+MAX_ANGULAR = 4.8   # rad/s
 MIN_ANGULAR = 0.1    # rad/s
+
+# How long we wait after the last websocket message before we start
+# decaying toward zero. This is what actually distinguishes "finger is
+# still on the stick but not moving" (no new message, but intent to hold
+# the last commanded velocity) from "finger left the stick / connection
+# dropped" (no new message, should stop).
+CMD_TIMEOUT_SEC = 0.3
 
 class JoystickWebSocketNode(Node):
     def __init__(self):
         super().__init__('joystick_ws_node')
-        self.publisher = self.create_publisher(Twist, '/cmd_vel', 10)   # changed topic + msg type to match hardware_bridge_node.py
+        self.publisher = self.create_publisher(Twist, '/cmd_vel', 10)
         self.timer = self.create_timer(0.05, self.publish_cmd)  # 20Hz
         #stores current velocity
         self.linear_x = 0.0
         self.angular_z = 0.0
-        #decay factor to smoothly reduce velocity when no new commands are received not suddenly stop the robot
+        #decay factor to smoothly reduce velocity when no new commands are received, so we don't suddenly stop the robot
         self.decay = 0.65
+        #timestamp of the last websocket message we actually received — used to
+        #tell "holding steady" apart from "no commands arriving at all"
+        self.last_cmd_time = self.get_clock().now()
 
     def clamp_velocity(self, value, max_val, min_val):
 
@@ -42,20 +52,28 @@ class JoystickWebSocketNode(Node):
         return max(-max_val, min(max_val, value))
 
     def publish_cmd(self):
-        msg = Twist()   # changed from TwistStamped — no header needed for plain Twist
+        # Only decay if we haven't heard from the websocket client recently.
+        # Previously this ran on every 20Hz tick regardless of new messages,
+        # which meant holding the joystick perfectly still (no new
+        # touchmove/message, since position isn't changing) got crushed to
+        # 0.0 within ~150ms even though the user still wanted to move.
+        age_sec = (self.get_clock().now() - self.last_cmd_time).nanoseconds / 1e9
+        if age_sec > CMD_TIMEOUT_SEC:
+            self.linear_x  *= self.decay
+            self.angular_z *= self.decay
+            #prevents tiny movements to prevent robot from shaking as it settles to zero
+            if abs(self.linear_x) < 0.01:
+                self.linear_x = 0.0
+            if abs(self.angular_z) < 0.01:
+                self.angular_z = 0.0
+
+        msg = Twist()
 
         # clamp before publishing — hard safety limit so the robot never receives
         # a command outside the safe operating range regardless of joystick input
         msg.linear.x  = self.clamp_velocity(self.linear_x,  MAX_LINEAR,  MIN_LINEAR)
         msg.angular.z = self.clamp_velocity(self.angular_z, MAX_ANGULAR, MIN_ANGULAR)
 
-        self.linear_x  *= self.decay
-        self.angular_z *= self.decay
-        #prevents tiny movements to prvent robot from shaking when joystick is released, if the velocity is very small we set it to zero
-        if abs(self.linear_x) < 0.01:
-            self.linear_x = 0.0
-        if abs(self.angular_z) < 0.01:
-            self.angular_z = 0.0
         self.publisher.publish(msg)
 
     #update velocity from websocket data, this will be called from the websocket handler when a new message is received,
@@ -64,6 +82,7 @@ class JoystickWebSocketNode(Node):
         # clamp on receive too so stored values are always within safe range, this way even if the websocket client sends out-of-range values, our node will never use them
         self.linear_x  = self.clamp_velocity(float(linear),  MAX_LINEAR,  MIN_LINEAR)
         self.angular_z = self.clamp_velocity(float(angular), MAX_ANGULAR, MIN_ANGULAR)
+        self.last_cmd_time = self.get_clock().now()
 
 node = None
 

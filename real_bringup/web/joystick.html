@@ -174,23 +174,23 @@
   <div class="header">
     <div>
       <h1>Robot Control</h1>
-      <p>SLAM Mapping Mode</p>
+      <p>joystick mode</p>
     </div>
   </div>
 
   <div class="conn-bar" id="connBar">
     <div class="conn-dot"></div>
-    <span id="connText">Connecting to ws://192.168.1.11:8765</span>
+    <span id="connText">Connecting to ws://192.168.3.235:8765</span>
   </div>
 
   <div class="joystick-wrap">
     <div class="joystick-ring">
       <div class="cross-h"></div>
       <div class="cross-v"></div>
-      <span class="dir-label n">FWD</span>
-      <span class="dir-label s">BWD</span>
-      <span class="dir-label w">LEFT</span>
-      <span class="dir-label e">RIGHT</span>
+      <span class="dir-label n">LEFT</span>
+      <span class="dir-label s">RIGHT</span>
+      <span class="dir-label w">FWD</span>
+      <span class="dir-label e">BWD</span>
       <div id="zone"></div>
     </div>
   </div>
@@ -208,12 +208,20 @@
     </div>
   </div>
 
-  //update it after setting max and mini values
-  <div class="footer">MAX VEL 0.84 m/s · 1.5 rad/s · 20 Hz</div>
+  <div class="footer">MAX VEL 0.313 m/s · 4.8 rad/s · 20 Hz</div>
 
   <script>// Define maximum linear and angular velocities for scaling the joystick input
-    const MAX_LINEAR  = 0.84;
-    const MAX_ANGULAR = 1.5;
+    // must match MAX_LINEAR / MAX_ANGULAR on the ROS joystick_ws_node — otherwise
+    // this UI's scaling and the robot's actual clamp limits disagree
+    const MAX_LINEAR  = 0.313;
+    const MAX_ANGULAR = 4.8;
+
+    // how often to (re)send the current stick vector over the websocket,
+    // independent of whether nippleJS fired a 'move' event. nippleJS only
+    // fires 'move' on actual pointer motion, so holding the stick perfectly
+    // still produces zero events — without this heartbeat the ROS node has
+    // no way to tell "holding steady" apart from "let go".
+    const SEND_INTERVAL_MS = 50; // 20Hz, matches ROS publish rate
 
     const connBar  = document.getElementById('connBar');
     const connText = document.getElementById('connText');
@@ -224,13 +232,18 @@
 
     let ws;
 
+    // last known stick vector, sent continuously by the heartbeat below
+    let currentLinear  = 0.0;
+    let currentAngular = 0.0;
+    let stickActive    = false; // only heartbeat while the stick is actually held
+
     function connect() {
-      ws = new WebSocket("ws://192.168.1.11:8765");
+      ws = new WebSocket("ws://192.168.3.235:8765");
 
    
       ws.onopen = () => {
         connBar.className = 'conn-bar connected';
-        connText.textContent = 'Connected · ws://192.168.1.11:8765';
+        connText.textContent = 'Connected · ws://192.168.3.235:8765';
       };
 
    
@@ -260,23 +273,41 @@
       linBar.style.background = linear < 0 ? '#f85149' : '#00d4aa';
     }
 
+    joystick.on('start', () => {
+      stickActive = true;
+    });
+
     joystick.on('move', (evt, data) => {
       const angle  = data.angle.radian;
       const force  = Math.min(data.force, 1.0);
-      const linear  =  Math.sin(angle) * force * MAX_LINEAR;
-      const angular = -Math.cos(angle) * force * MAX_ANGULAR;
-      updateMetrics(linear, angular);
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ linear, angular }));
-      }
+      currentLinear  =  Math.sin(angle) * force * MAX_LINEAR;
+      currentAngular = -Math.cos(angle) * force * MAX_ANGULAR;
+      updateMetrics(currentLinear, currentAngular);
+      // no direct ws.send here anymore — the heartbeat interval below sends
+      // this on a fixed schedule, so holding the stick still keeps sending
+      // the same values instead of going silent
     });
 
     joystick.on('end', () => {
+      stickActive   = false;
+      currentLinear  = 0.0;
+      currentAngular = 0.0;
       updateMetrics(0, 0);
+      // send the stop immediately rather than waiting for the next heartbeat tick
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ linear: 0.0, angular: 0.0 }));
       }
     });
+
+    // heartbeat: the single source of truth for what gets sent over the
+    // websocket, at a fixed 20Hz regardless of whether the stick is moving,
+    // held still, or was just released.
+    setInterval(() => {
+      if (!stickActive) return; // nothing to resend, 'end' already sent the stop
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ linear: currentLinear, angular: currentAngular }));
+      }
+    }, SEND_INTERVAL_MS);
   </script>
 
 </body>

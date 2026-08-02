@@ -1,4 +1,4 @@
-// lift_main.ino
+// lift_main_Final.ino
 //
 // Hardware
 //   2x NEMA23 stepper motors    — 1.8 deg/step, 2.5 A rated
@@ -55,8 +55,10 @@
 // Both TB6600 PUL+ inputs wired together to one Arduino pin
 #define LIFT_STEP_PIN       3
 
+
 // Both TB6600 DIR+ inputs wired together to one Arduino pin
-#define LIFT_DIR_PIN        2
+#define LIFT_LEFT_DIR_PIN        2
+#define LIFT_RIGHT_DIR_PIN        4
 
 // Limit switches — INPUT_PULLUP, LOW = triggered
 #define LIFT_BOTTOM_SWITCH  8   // home / zero reference
@@ -64,8 +66,8 @@
 
 // ─── Leadscrew & driver constants ─────────────────────────────────────────────
 #define FULL_STEPS_PER_REV  200
-#define MICROSTEPS          8
-#define STEPS_PER_REV       (FULL_STEPS_PER_REV * MICROSTEPS)   // 1600 steps/rev
+#define MICROSTEPS          4
+#define STEPS_PER_REV       (FULL_STEPS_PER_REV * MICROSTEPS)   // 400 steps/rev
 #define MM_PER_REV          8.0f                                 // TR8x8 leadscrew
 #define STEPS_PER_MM        (STEPS_PER_REV / MM_PER_REV)        // 200.0 steps/mm
 
@@ -93,7 +95,7 @@
 // ─── Homing backoff ───────────────────────────────────────────────────────────
 // Steps to move UP after the bottom switch triggers so it just releases cleanly
 //   100 steps ÷ 200 steps/mm = 0.5 mm clearance
-#define HOME_BACKOFF_STEPS  100
+#define HOME_BACKOFF_STEPS  1000
 
 // ─── Debug output ─────────────────────────────────────────────────────────────
 // true  = send a status JSON every STATUS_REPORT_MS (useful during calibration)
@@ -188,7 +190,7 @@ static void send_lift_result(bool success, const char *reason = "")
 // Sets S_ERROR and returns false if the top switch fires while going up.
 static bool step_toward_target(long target, unsigned long speed)
 {
-    if (lift_pos == target ) return true;
+    if (lift_pos == target) return true;
 
     // Safety: abort immediately if top switch triggers while going up
     if (lift_pos < target && digitalRead(LIFT_TOP_SWITCH) == LOW)
@@ -205,12 +207,13 @@ static bool step_toward_target(long target, unsigned long speed)
     last_step_us = now_us;
 
     bool going_up = (target > lift_pos);
-    digitalWrite(LIFT_DIR_PIN, going_up ? HIGH : LOW);
+    digitalWrite(LIFT_LEFT_DIR_PIN, going_up ? HIGH : LOW);
+    digitalWrite(LIFT_RIGHT_DIR_PIN, going_up? HIGH : LOW);
     delayMicroseconds(DIR_SETUP_US);
 
-    digitalWrite(LIFT_STEP_PIN, HIGH);
-    delayMicroseconds(STEP_PULSE_US);
     digitalWrite(LIFT_STEP_PIN, LOW);
+    delayMicroseconds(STEP_PULSE_US);
+    digitalWrite(LIFT_STEP_PIN, HIGH);
     delayMicroseconds(STEP_PULSE_US);
 
     lift_pos += going_up ? 1 : -1;
@@ -218,6 +221,8 @@ static bool step_toward_target(long target, unsigned long speed)
 
     return (lift_pos == target);
 }
+
+
 
 // Step toward a limit switch during homing only.
 // Non-blocking: returns true only when switch_pin reads LOW (triggered).
@@ -232,7 +237,8 @@ static bool step_to_switch(uint8_t switch_pin, bool going_up, unsigned long spee
 
     last_step_us = now_us;
 
-    digitalWrite(LIFT_DIR_PIN, going_up ? HIGH : LOW);
+    digitalWrite(LIFT_LEFT_DIR_PIN, going_up ? HIGH : LOW);
+    digitalWrite(LIFT_RIGHT_DIR_PIN, going_up ? HIGH: LOW);
     delayMicroseconds(DIR_SETUP_US);
 
     digitalWrite(LIFT_STEP_PIN, HIGH);
@@ -248,7 +254,8 @@ static bool step_to_switch(uint8_t switch_pin, bool going_up, unsigned long spee
 // `steps` is small (100 = 0.5 mm), so the brief block is acceptable.
 static void backoff_from_switch(int steps, bool going_up, unsigned long speed)
 {
-    digitalWrite(LIFT_DIR_PIN, going_up ? HIGH : LOW);
+    digitalWrite(LIFT_LEFT_DIR_PIN, going_up ? HIGH : LOW);
+    digitalWrite(LIFT_RIGHT_DIR_PIN, going_up ? HIGH : LOW);
     delayMicroseconds(DIR_SETUP_US);
 
     unsigned long interval = 1000000UL / speed;
@@ -373,10 +380,12 @@ void setup()
     Serial.begin(SERIAL_BAUD);
 
     pinMode(LIFT_STEP_PIN, OUTPUT);
-    pinMode(LIFT_DIR_PIN,  OUTPUT);
+    pinMode(LIFT_LEFT_DIR_PIN,  OUTPUT);
+    pinMode(LIFT_RIGHT_DIR_PIN, OUTPUT);
 
     digitalWrite(LIFT_STEP_PIN, LOW);
-    digitalWrite(LIFT_DIR_PIN,  LOW);
+    digitalWrite(LIFT_LEFT_DIR_PIN,  LOW);
+    digitalWrite(LIFT_RIGHT_DIR_PIN, HIGH);
 
     pinMode(LIFT_BOTTOM_SWITCH, INPUT_PULLUP);
     pinMode(LIFT_TOP_SWITCH,    INPUT_PULLUP);

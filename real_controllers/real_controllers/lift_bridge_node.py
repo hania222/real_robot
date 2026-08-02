@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 """
-lift_bridge_node.py
-Bridges the Arduino Uno lift controller and ROS 2.
+lift_node.py
 
-Serial protocol (115200 baud, newline-terminated JSON):
-  Pi → Uno:  {"cmd":"home"} | {"cmd":"lift","height_mm":100.0} | {"cmd":"status"} | {"cmd":"stop"}
-  Uno → Pi:  {"type":"boot"} | {"type":"ack"} | {"type":"home_complete"} |
-              {"type":"lift_complete"} | {"type":"status"} | {"type":"error"}
+Simple ROS 2 bridge between the Pi and the lift Arduino Uno
+(lift_main.ino — home / lift / status / stop JSON-over-serial protocol).
 
-ROS interface:
-  Subscriptions:
-    /lift/command   (std_msgs/String)  — JSON: {"cmd":"home"} or {"cmd":"lift","height_mm":N} or {"cmd":"stop"}
-  Publications:
-    /lift/status    (std_msgs/String)  — raw status JSON forwarded from Arduino
-    /lift/state     (std_msgs/String)  — "IDLE" | "BUSY" | "ERROR" | "HOMING" | "MOVING"
-    /lift/height_mm (std_msgs/Float32) — current lift height in mm (from status packets)
+How it works:
+  - Subscribe to /lift/command (std_msgs/String) — publish raw JSON strings
+    like '{"cmd":"home"}' or '{"cmd":"lift","height_mm":150.0}' to trigger
+    a sequence.
+  - Every JSON line the Arduino sends back over serial is republished as-is
+    on /lift/status (std_msgs/String) — ack, home_complete, lift_complete,
+    status, error, boot — all of it, unmodified.
+  - No blocking, no waiting for completion inside the node. If you need to
+    know when a "lift" finished, subscribe to /lift/status and watch for a
+    message with "type":"lift_complete".
+
+Same pattern as hardware_bridge_node.py, joystick_ws_node.py, and
+carriage_node.py — kept consistent on purpose.
 """
 
 import json
@@ -22,192 +25,82 @@ import threading
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String, Float32
-
+from std_msgs.msg import String
 import serial
 
 
-class LiftBridgeNode(Node):
+class LiftNode(Node):
 
     def __init__(self):
-        super().__init__('lift_bridge_node')
+        super().__init__('lift_node')
 
-        self.declare_parameter('serial_port', '/dev/lift_arduino')
+        self.declare_parameter('serial_port', '/dev/UNOLIFT')
         self.declare_parameter('baud_rate', 115200)
+        self.declare_parameter('status_poll_period_sec', 1.0)
 
-        port      = self.get_parameter('serial_port').value
-        baud_rate = self.get_parameter('baud_rate').value
+        port        = self.get_parameter('serial_port').value
+        baud_rate   = self.get_parameter('baud_rate').value
+        poll_period = self.get_parameter('status_poll_period_sec').value
 
         self.serial_conn = serial.Serial(port, baud_rate, timeout=0.1)
         self.get_logger().info(f'Serial open: {port} @ {baud_rate} baud')
 
-        # publishers
-        self.status_pub    = self.create_publisher(String,  '/lift/status',    10)
-        self.state_pub     = self.create_publisher(String,  '/lift/state',     10)
-        self.height_pub    = self.create_publisher(Float32, '/lift/height_mm', 10)
+        # write lock — command callback and the status-poll timer both
+        # write to the serial port, so guard against interleaved writes
+        self._write_lock = threading.Lock()
+        self._shutdown_requested = False
 
-        # subscriber — Pi/task_manager sends commands here
+        # publisher: every JSON line from the Arduino, forwarded as-is
+        self.status_pub = self.create_publisher(String, '/lift/status', 10)
+
+        # subscriber: raw JSON commands to send to the Arduino
         self.create_subscription(String, '/lift/command', self._on_command, 10)
 
-        # internal state mirrored from Arduino status packets
-        self._is_homed    = False
-        self._lift_mm     = 0.0
-        self._busy        = False
-
-        # clean shutdown flag
-        self._shutdown_requested = False
+        # periodic status poll so consumers get regular updates even if
+        # nothing is actively homing/lifting
+        self.create_timer(poll_period, self._poll_status)
 
         threading.Thread(target=self._serial_reader_loop, daemon=True).start()
 
-    # ── Outgoing: ROS → Arduino ──────────────────────────────────────────────
-
-    def _on_command(self, msg: String):
-        """
-        Forward a command from /lift/command to the Arduino over serial.
-        Accepted payloads:
-          {"cmd":"home"}
-          {"cmd":"lift","height_mm":250.0}
-          {"cmd":"stop"}
-          {"cmd":"status"}
-        Reject lift commands while not homed or while busy so the
-        task_manager gets an immediate error instead of a silent queue.
-        """
-        raw = msg.data.strip()
-
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError as error:
-            self.get_logger().warn(f'/lift/command bad JSON: {error}')
-            return
-
-        cmd = data.get('cmd', '')
-
-        # guard: lift requires homing first
-        if cmd == 'lift' and not self._is_homed:
-            self._publish_error('not homed — send home command first')
-            return
-
-        # guard: reject new commands while the Arduino is busy
-        # (stop and status are always allowed through)
-        if self._busy and cmd not in ('stop', 'status'):
-            self._publish_error(f'busy — Arduino is still executing previous command, wait for completion')
-            return
-
-        self._send(data)
-        self.get_logger().info(f'→ Arduino: {raw}')
-
     def _send(self, data: dict):
         try:
-            self.serial_conn.write((json.dumps(data) + '\n').encode())
-        except Exception as error:
-            self.get_logger().warn(f'Serial write error: {error}')
+            with self._write_lock:
+                self.serial_conn.write((json.dumps(data) + '\n').encode())
+        except Exception as e:
+            self.get_logger().warn(f'Serial write error: {e}')
 
-    # ── Incoming: Arduino → ROS ──────────────────────────────────────────────
+    def _on_command(self, msg: String):
+        try:
+            data = json.loads(msg.data)
+        except json.JSONDecodeError:
+            self.get_logger().warn(f'/lift/command: bad JSON: {msg.data}')
+            return
+        self._send(data)
+
+    def _poll_status(self):
+        self._send({'cmd': 'status'})
 
     def _serial_reader_loop(self):
         while not self._shutdown_requested:
             try:
-                raw_line = self.serial_conn.readline().decode('utf-8', errors='ignore').strip()
-                if not raw_line.startswith('{'):
-                    continue
-                data = json.loads(raw_line)
+                line = self.serial_conn.readline().decode('utf-8', errors='ignore').strip()
+            except Exception as e:
+                self.get_logger().warn(f'Serial read error: {e}')
+                continue
+
+            if not line or not line.startswith('{'):
+                continue
+
+            # validate it's real JSON before republishing, but forward the
+            # original raw line so nothing is lost/reformatted
+            try:
+                json.loads(line)
             except json.JSONDecodeError:
                 continue
-            except Exception as error:
-                self.get_logger().warn(f'Serial read error: {error}')
-                continue
 
-            self._dispatch_packet(data, raw_line)
-
-    def _dispatch_packet(self, data: dict, raw_line: str):
-        """Route each incoming JSON packet to the right handler."""
-        packet_type = data.get('type', '')
-
-        if packet_type == 'boot':
-            self.get_logger().info(f'Arduino boot: {data.get("msg", "")}')
-            self._publish_state('IDLE')
-
-        elif packet_type == 'ack':
-            cmd = data.get('cmd', '')
-            self.get_logger().info(f'Arduino ack: {cmd}')
-            # mark busy as soon as Arduino acknowledges an action command
-            if cmd in ('home', 'lift'):
-                self._busy = True
-                self._publish_state('HOMING' if cmd == 'home' else 'MOVING')
-
-        elif packet_type == 'home_complete':
-            success = data.get('success', False)
-            if success:
-                self._is_homed = True
-                self._lift_mm  = 0.0
-                self.get_logger().info('Lift homed successfully')
-                self._publish_state('IDLE')
-                self._publish_height(0.0)
-            else:
-                reason = data.get('reason', 'unknown')
-                self.get_logger().error(f'Homing failed: {reason}')
-                self._publish_state('ERROR')
-            self._busy = False
-
-        elif packet_type == 'lift_complete':
-            success = data.get('success', False)
-            if success:
-                self.get_logger().info(f'Lift move complete — now at {self._lift_mm:.1f} mm')
-                self._publish_state('IDLE')
-            else:
-                reason = data.get('reason', 'unknown')
-                self.get_logger().error(f'Lift move failed: {reason}')
-                self._publish_state('ERROR')
-            self._busy = False
-
-        elif packet_type == 'status':
-            # mirror Arduino state into ROS topics
-            self._is_homed = data.get('homed', self._is_homed)
-            self._lift_mm  = float(data.get('lift_mm', self._lift_mm))
-            self._busy     = data.get('busy', self._busy)
-            self._publish_height(self._lift_mm)
-            self._publish_state(data.get('state', 'IDLE'))
-            # forward the full raw JSON so task_manager can inspect it if needed
-            status_msg      = String()
-            status_msg.data = raw_line
-            self.status_pub.publish(status_msg)
-
-        elif packet_type == 'error':
-            error_text = data.get('msg', 'unknown error')
-            self.get_logger().error(f'Arduino error: {error_text}')
-            self._busy = False
-            self._publish_state('ERROR')
-            # also forward as a status message so callers subscribed to /lift/status see it
-            status_msg      = String()
-            status_msg.data = raw_line
-            self.status_pub.publish(status_msg)
-
-        else:
-            # unknown packet — log and ignore
-            self.get_logger().debug(f'Unknown packet type "{packet_type}": {raw_line}')
-
-    # ── Publisher helpers ────────────────────────────────────────────────────
-
-    def _publish_state(self, state: str):
-        msg      = String()
-        msg.data = state
-        self.state_pub.publish(msg)
-
-    def _publish_height(self, height_mm: float):
-        msg       = Float32()
-        msg.data  = height_mm
-        self.height_pub.publish(msg)
-
-    def _publish_error(self, text: str):
-        """Publish a synthetic error to /lift/status without sending to Arduino."""
-        self.get_logger().error(f'[lift_bridge] {text}')
-        error_packet = json.dumps({'type': 'error', 'msg': text})
-        status_msg      = String()
-        status_msg.data = error_packet
-        self.status_pub.publish(status_msg)
-        self._publish_state('ERROR')
-
-    # ── Cleanup ──────────────────────────────────────────────────────────────
+            out = String()
+            out.data = line
+            self.status_pub.publish(out)
 
     def destroy_node(self):
         self._shutdown_requested = True
@@ -218,7 +111,7 @@ class LiftBridgeNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = LiftBridgeNode()
+    node = LiftNode()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

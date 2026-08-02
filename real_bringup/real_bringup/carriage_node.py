@@ -33,7 +33,7 @@ class CarriageNode(Node):
     def __init__(self):
         super().__init__('carriage_node')
 
-        self.declare_parameter('serial_port', '/dev/carriage_arduino')
+        self.declare_parameter('serial_port', '/dev/UNOCAR')
         self.declare_parameter('baud_rate', 115200)
         self.declare_parameter('status_poll_period_sec', 1.0)
 

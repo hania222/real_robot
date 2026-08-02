@@ -49,9 +49,9 @@ class RobotBridgeNode(Node):
         super().__init__('robot_bridge_node')
 
         # ── Parameters ───────────────────────────────────────────────────────
-        self.declare_parameter('lift_serial_port', '/dev/lift_arduino')
+        self.declare_parameter('lift_serial_port', '/dev/UNOLIFT')
         self.declare_parameter('lift_baud_rate', 115200)
-        self.declare_parameter('carriage_serial_port', '/dev/carriage_arduino')
+        self.declare_parameter('carriage_serial_port', '/dev/UNOCAR')
         self.declare_parameter('carriage_baud_rate', 115200)
 
         lift_port      = self.get_parameter('lift_serial_port').value

@@ -34,7 +34,7 @@ class LiftNode(Node):
     def __init__(self):
         super().__init__('lift_node')
 
-        self.declare_parameter('serial_port', '/dev/lift_arduino')
+        self.declare_parameter('serial_port', '/dev/UNOLIFT')
         self.declare_parameter('baud_rate', 115200)
         self.declare_parameter('status_poll_period_sec', 1.0)
 
